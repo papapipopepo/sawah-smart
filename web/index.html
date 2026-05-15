@@ -1,0 +1,4956 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SawahSmart — Sistem Monitoring Padi</title>
+<meta name="theme-color" content="#2d7a3c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SawahSmart">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<style>
+:root {
+  --green-900: #1a3a1f;
+  --green-800: #1f4a26;
+  --green-700: #246030;
+  --green-600: #2d7a3c;
+  --green-500: #38a047;
+  --green-400: #4ec060;
+  --green-300: #7dd492;
+  --green-200: #b3e6bc;
+  --green-100: #e8f7eb;
+  --green-50:  #f3fbf5;
+  --white: #ffffff;
+  --grey-900: #1c1e1f;
+  --grey-700: #3d4145;
+  --grey-500: #6b7280;
+  --grey-400: #9ca3af;
+  --grey-300: #d1d5db;
+  --grey-200: #e5e7eb;
+  --grey-100: #f3f4f6;
+  --grey-50:  #f9fafb;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --info: #3b82f6;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.1), 0 4px 10px rgba(0,0,0,0.06);
+  --radius: 14px;
+  --radius-sm: 8px;
+  --sidebar-w: 240px;
+  --font: 'Sora', sans-serif;
+  --mono: 'DM Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--grey-50);
+  color: var(--grey-900);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+}
+
+/* ========= UTILITY ========= */
+.hidden { display: none !important; }
+.page {
+  display: none;
+}
+
+.page.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.page.app-layout.active {
+  flex-direction: row;
+}
+
+
+
+button { cursor: pointer; font-family: var(--font); }
+input, select, textarea { font-family: var(--font); }
+
+/* ========= AUTH PAGES ========= */
+.auth-page {
+  min-height: 100vh;
+  align-items: stretch;
+  overflow-y: auto;
+}
+
+.auth-page.active {
+  display: flex !important;
+}
+
+.auth-left {
+  flex: 1;
+  background: linear-gradient(160deg, var(--green-800) 0%, var(--green-600) 50%, var(--green-400) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 40px;
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+.auth-left::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+.auth-left::after {
+  content: '';
+  position: absolute;
+  bottom: -80px;
+  right: -80px;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+}
+
+.auth-logo {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.logo-icon {
+  width: 80px;
+  height: 80px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  font-size: 38px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.auth-logo h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.5px;
+}
+
+.auth-logo p {
+  color: rgba(255,255,255,0.75);
+  font-size: 0.875rem;
+  margin-top: 6px;
+  font-weight: 300;
+}
+
+.auth-tagline {
+  position: relative;
+  z-index: 1;
+  margin-top: 40px;
+  text-align: center;
+}
+
+.auth-tagline .feature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255,255,255,0.85);
+  font-size: 0.875rem;
+  margin-bottom: 12px;
+}
+
+.auth-tagline .feature span:first-child {
+  font-size: 1.1rem;
+}
+
+.auth-right {
+  width: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 40px;
+  background: white;
+  overflow-y: auto;
+}
+
+.auth-form-box {
+  width: 100%;
+  max-width: 360px;
+}
+
+.auth-form-box h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--grey-900);
+  margin-bottom: 6px;
+}
+
+.auth-form-box p {
+  color: var(--grey-500);
+  font-size: 0.875rem;
+  margin-bottom: 28px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--grey-700);
+  margin-bottom: 6px;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  color: var(--grey-900);
+  background: var(--grey-50);
+  transition: all 0.2s;
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--green-500);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(56,160,71,0.12);
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 12px;
+  background: var(--green-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+
+.btn-primary:hover {
+  background: var(--green-700);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(56,160,71,0.3);
+}
+
+.btn-secondary {
+  width: 100%;
+  padding: 11px;
+  background: transparent;
+  color: var(--green-600);
+  border: 1.5px solid var(--green-300);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  margin-top: 10px;
+}
+
+.btn-secondary:hover {
+  background: var(--green-50);
+}
+
+.btn-ghost {
+  width: 100%;
+  padding: 11px;
+  background: var(--grey-100);
+  color: var(--grey-600);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  margin-top: 8px;
+  color: var(--grey-700);
+}
+
+.btn-ghost:hover { background: var(--grey-200); }
+
+.auth-link {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 0.875rem;
+  color: var(--grey-500);
+}
+
+.auth-link a {
+  color: var(--green-600);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+  color: var(--grey-400);
+  font-size: 0.8rem;
+}
+
+.divider::before, .divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--grey-200);
+}
+
+/* ========= APP LAYOUT ========= */
+.app-layout {
+  min-height: 100vh;
+  flex-direction: row;
+  align-items: stretch;
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* ========= SIDEBAR ========= */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--green-900);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  z-index: 100;
+  transition: transform 0.3s;
+}
+
+.sidebar-brand {
+  padding: 24px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar-brand .logo-sm {
+  width: 36px;
+  height: 36px;
+  background: var(--green-500);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.sidebar-brand span {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: white;
+}
+
+.sidebar-brand small {
+  display: block;
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.45);
+  font-weight: 400;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 16px 12px;
+  overflow-y: auto;
+}
+
+.nav-section-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+  padding: 8px 8px 4px;
+  margin-top: 8px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: rgba(255,255,255,0.65);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 2px;
+  position: relative;
+}
+
+.nav-item:hover {
+  background: rgba(255,255,255,0.08);
+  color: white;
+}
+
+.nav-item.active {
+  background: var(--green-600);
+  color: white;
+}
+
+.nav-item .icon { font-size: 1.1rem; width: 20px; text-align: center; }
+
+.nav-badge {
+  margin-left: auto;
+  background: var(--danger);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.sidebar-user {
+  padding: 16px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--green-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+
+.user-info { flex: 1; min-width: 0; }
+.user-info strong { display: block; font-size: 0.8rem; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-info small { font-size: 0.7rem; color: rgba(255,255,255,0.45); }
+
+/* ========= MAIN CONTENT ========= */
+.main-content {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.topbar {
+  background: white;
+  border-bottom: 1px solid var(--grey-200);
+  padding: 0 28px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.topbar-title h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--grey-900);
+}
+
+.topbar-title p {
+  font-size: 0.75rem;
+  color: var(--grey-500);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1.5px solid var(--grey-200);
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.topbar-btn:hover { border-color: var(--green-400); background: var(--green-50); }
+.topbar-btn .dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; background: var(--danger); border-radius: 50%; border: 2px solid white; }
+
+.page-body {
+  padding: 28px;
+  flex: 1;
+  overflow-x: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* ========= INNER PAGES ========= */
+.inner-page { display: none; }
+.inner-page.active { display: block; }
+
+/* ========= CARDS ========= */
+.card {
+  background: white;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--grey-200);
+  padding: 20px;
+}
+
+/* ========= STAT CARDS ========= */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.stat-card {
+  background: white;
+  border-radius: var(--radius);
+  padding: 20px;
+  border: 1px solid var(--grey-200);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 4px 4px 0 0;
+}
+
+.stat-card.temp::before { background: linear-gradient(90deg, #f97316, #ef4444); }
+.stat-card.light::before { background: linear-gradient(90deg, #f59e0b, #fcd34d); }
+.stat-card.soil::before { background: linear-gradient(90deg, #10b981, var(--green-500)); }
+.stat-card.water::before { background: linear-gradient(90deg, #3b82f6, #06b6d4); }
+
+.stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+}
+
+.stat-card.temp .stat-icon { background: #fff3ef; }
+.stat-card.light .stat-icon { background: #fffbeb; }
+.stat-card.soil .stat-icon { background: #ecfdf5; }
+.stat-card.water .stat-icon { background: #eff6ff; }
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--grey-500);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--grey-900);
+  font-family: var(--mono);
+  line-height: 1;
+}
+
+.stat-unit {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--grey-500);
+}
+
+.stat-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-top: 8px;
+}
+
+.stat-status.ok { background: var(--green-100); color: var(--green-700); }
+.stat-status.warn { background: #fffbeb; color: #92400e; }
+.stat-status.danger { background: #fef2f2; color: #991b1b; }
+
+/* ========= CHARTS ========= */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chart-header h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--grey-900);
+}
+
+.chart-legend {
+  display: flex;
+  gap: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: var(--grey-500);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.chart-canvas-wrap {
+  position: relative;
+  height: 180px;
+}
+
+/* SVG Chart */
+.svg-chart {
+  width: 100%;
+  height: 100%;
+}
+
+/* Plant status */
+.plant-status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.fase-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.fase-badge.vegetatif { background: var(--green-100); color: var(--green-700); }
+.fase-badge.generatif { background: #fef3c7; color: #92400e; }
+.fase-badge.panen { background: #f0fdf4; color: #166534; }
+
+.health-bar-wrap {
+  margin-top: 10px;
+}
+
+.health-bar-track {
+  height: 8px;
+  background: var(--grey-200);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.health-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--green-400), var(--green-600));
+  transition: width 0.8s ease;
+}
+
+.health-score-text {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--grey-500);
+  margin-top: 4px;
+}
+
+/* ========= SECTION TITLE ========= */
+.section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--grey-400);
+  margin-bottom: 12px;
+}
+
+/* ========= TABLE ========= */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--grey-500);
+  border-bottom: 1px solid var(--grey-200);
+  background: var(--grey-50);
+}
+
+.data-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--grey-100);
+  color: var(--grey-700);
+}
+
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--grey-50); }
+
+.mono { font-family: var(--mono); }
+
+/* ========= NOTIF ========= */
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--grey-100);
+}
+
+.notif-item:last-child { border-bottom: none; }
+
+.notif-dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.notif-dot.warn { background: #fffbeb; }
+.notif-dot.danger { background: #fef2f2; }
+.notif-dot.info { background: #eff6ff; }
+.notif-dot.ok { background: var(--green-100); }
+
+.notif-content strong {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--grey-900);
+  margin-bottom: 2px;
+}
+
+.notif-content p {
+  font-size: 0.8rem;
+  color: var(--grey-500);
+}
+
+.notif-time {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--grey-400);
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+
+/* ========= LAHAN / PLOT ========= */
+.plot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.plot-card {
+  background: white;
+  border-radius: var(--radius);
+  border: 1px solid var(--grey-200);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.plot-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--green-300);
+}
+
+.plot-header {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--green-800), var(--green-600));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.plot-header h3 { font-size: 1rem; font-weight: 700; }
+.plot-header span { font-size: 0.75rem; opacity: 0.75; }
+
+.plot-body { padding: 16px 20px; }
+
+.plot-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--grey-100);
+  font-size: 0.8125rem;
+}
+
+.plot-stat:last-child { border-bottom: none; }
+.plot-stat .key { color: var(--grey-500); }
+.plot-stat .val { font-weight: 600; color: var(--grey-900); font-family: var(--mono); }
+
+.plot-footer {
+  padding: 12px 20px;
+  background: var(--grey-50);
+  border-top: 1px solid var(--grey-200);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.plot-detail-btn {
+  font-size: 0.8rem;
+  color: var(--green-600);
+  font-weight: 600;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* ========= KAMERA ========= */
+.camera-feed {
+  aspect-ratio: 16/9;
+  background: var(--grey-900);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.camera-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #1a3a1f 0%, #246030 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.5);
+  font-size: 0.875rem;
+}
+
+.camera-overlay .cam-icon { font-size: 3rem; margin-bottom: 10px; opacity: 0.4; }
+.live-badge {
+  position: absolute;
+  top: 12px; left: 12px;
+  background: var(--danger);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.cam-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cam-btn {
+  flex: 1;
+  padding: 9px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--grey-200);
+  background: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--grey-700);
+  transition: all 0.2s;
+}
+
+.cam-btn:hover { border-color: var(--green-400); color: var(--green-600); background: var(--green-50); }
+.cam-btn.capture { background: var(--green-600); color: white; border-color: var(--green-600); }
+.cam-btn.capture:hover { background: var(--green-700); }
+
+/* ========= FILTER BAR ========= */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-bar input[type="date"],
+.filter-bar select {
+  padding: 8px 12px;
+  border: 1.5px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  color: var(--grey-700);
+  background: white;
+  outline: none;
+  font-family: var(--mono);
+}
+
+.filter-bar input[type="date"]:focus,
+.filter-bar select:focus {
+  border-color: var(--green-500);
+}
+
+.filter-btn {
+  padding: 8px 16px;
+  background: var(--green-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* ========= SUB TABS ========= */
+.sub-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--grey-100);
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  width: fit-content;
+}
+
+.sub-tab {
+  padding: 7px 16px;
+  border-radius: 7px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--grey-500);
+  border: none;
+  background: none;
+  transition: all 0.2s;
+}
+
+.sub-tab.active {
+  background: white;
+  color: var(--green-700);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ========= PROFILE ========= */
+.profile-avatar-big {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--green-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: white;
+  margin: 0 auto 16px;
+}
+
+.profile-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--grey-100);
+  font-size: 0.875rem;
+}
+
+.profile-info-row .key { color: var(--grey-500); }
+.profile-info-row .val { font-weight: 600; color: var(--grey-900); }
+
+.role-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--green-100);
+  color: var(--green-700);
+}
+
+.btn-logout {
+  width: 100%;
+  padding: 12px;
+  background: #fef2f2;
+  color: var(--danger);
+  border: 1.5px solid #fecaca;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: 20px;
+  transition: all 0.2s;
+}
+
+.btn-logout:hover { background: #fee2e2; }
+
+/* ========= RESPONSIVE ========= */
+
+/* Tablet (max 900px) */
+@media (max-width: 900px) {
+  .auth-left { display: none; }
+  .auth-right { width: 100%; }
+
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .charts-grid { grid-template-columns: 1fr; }
+  .plant-status-grid { grid-template-columns: 1fr; }
+  .plot-grid { grid-template-columns: 1fr; }
+
+  .sidebar {
+    transform: translateX(-100%);
+    width: 260px;
+    z-index: 200;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .main-content { margin-left: 0; }
+  .menu-toggle { display: flex !important; }
+
+  .topbar { padding: 0 16px; }
+  .page-body { padding: 16px; }
+
+  /* Profile layout */
+  div[style*="grid-template-columns:320px"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Admin stats */
+  div[style*="repeat(4,1fr)"] {
+    grid-template-columns: repeat(2,1fr) !important;
+  }
+
+  /* Sensor form grid */
+  div[style*="grid-template-columns:1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Mobile (max 600px) */
+@media (max-width: 600px) {
+  :root {
+    --radius: 10px;
+    --radius-sm: 7px;
+    --sidebar-w: 0px;
+    font-size: 14px;
+  }
+
+  /* Stats: 2 kolom di mobile */
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .stat-card { padding: 12px; }
+  .stat-value { font-size: 1.3rem; }
+  .stat-unit { font-size: 0.75rem; }
+  .stat-icon { width: 30px; height: 30px; font-size: 0.85rem; margin-bottom: 6px; }
+  .stat-label { font-size: 0.68rem; }
+  .stat-status { font-size: 0.65rem; padding: 2px 6px; }
+
+  .page-body { padding: 10px; }
+
+  /* Card padding lebih kecil */
+  .card { padding: 12px; }
+
+  /* Topbar */
+  .topbar { height: 52px; padding: 0 10px; }
+  .topbar-title h2 { font-size: 0.875rem; }
+  .topbar-title p { font-size: 0.65rem; }
+  .topbar-btn { width: 32px; height: 32px; font-size: 0.85rem; }
+
+  /* Chart lebih pendek di mobile */
+  .chart-canvas-wrap { height: 120px; }
+  .charts-grid { gap: 10px; }
+  .chart-header h3 { font-size: 0.8rem; }
+
+  /* Login card mobile */
+  .login-card { padding: 20px 16px 16px; max-width: 340px; }
+  .login-logo h1 { font-size: 1.15rem; }
+  .login-logo p { font-size: 0.7rem; }
+  .login-features { gap: 4px; }
+  .feature-chip { font-size: 0.62rem; padding: 2px 7px; }
+  .login-form-title { font-size: 0.95rem; }
+  .login-form-sub { font-size: 0.72rem; }
+  .login-card .form-group input,
+  .login-card .form-group select { padding: 8px 10px; font-size: 16px; }
+  .login-card .btn-primary { padding: 9px; font-size: 0.82rem; }
+  .login-card .btn-secondary,
+  .login-card .btn-ghost { padding: 8px; font-size: 0.78rem; }
+
+  /* Sidebar */
+  .sidebar { width: 82vw; max-width: 280px; }
+  .nav-item { padding: 8px 10px; font-size: 0.82rem; }
+  .sidebar-brand span { font-size: 0.95rem; }
+
+  /* Section title */
+  .section-title { font-size: 0.67rem; }
+
+  /* Kontrol pompa */
+  .card div[style*="justify-content:space-between"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+  .card div[style*="display:flex;gap:10px"] button { flex: 1; }
+
+  /* Plot grid */
+  .plot-grid { grid-template-columns: 1fr; gap: 10px; }
+  .plot-header h3 { font-size: 0.875rem; }
+  .plot-stat { font-size: 0.75rem; }
+
+  /* Data table */
+  .data-table { font-size: 0.72rem; }
+  .data-table th, .data-table td { padding: 6px 8px; }
+
+  /* Filter bar */
+  .filter-bar { flex-direction: column; align-items: stretch; gap: 6px; }
+  .filter-bar input, .filter-bar select, .filter-btn { width: 100%; }
+
+  /* Sub tabs */
+  .sub-tab { padding: 5px 10px; font-size: 0.72rem; }
+
+  /* Notif */
+  .notif-item { gap: 8px; padding: 10px 0; }
+  .notif-dot { width: 28px; height: 28px; font-size: 0.8rem; }
+  .notif-content strong { font-size: 0.78rem; }
+  .notif-content p { font-size: 0.7rem; }
+
+  /* Splash */
+  .splash-app-name { font-size: 1.5rem; }
+  .splash-username { font-size: 1.4rem; }
+  .splash-features { flex-wrap: wrap; gap: 5px; }
+  .splash-timer-wrap { width: 88%; }
+  .splash-skip-btn { font-size: 0.8rem; padding: 10px 24px; }
+
+  /* Modal */
+  .modal-box { border-radius: 14px; margin: 10px; }
+  .modal-body { padding: 14px; }
+  .modal-footer { padding: 0 14px 14px; }
+  .modal-header { padding: 16px 18px; }
+  .modal-header h3 { font-size: 0.9rem; }
+
+  /* Profile */
+  .profile-avatar-big { width: 60px; height: 60px; font-size: 1.5rem; }
+  .profile-info-row { font-size: 0.8rem; }
+
+  /* Fase badge */
+  .fase-badge { font-size: 0.72rem; padding: 4px 10px; }
+
+  /* Health bar */
+  .health-score-text { font-size: 0.68rem; }
+
+  /* Nav badge */
+  .nav-badge { font-size: 0.6rem; padding: 1px 5px; }
+}
+
+/* Layar sangat kecil (max 380px) */
+@media (max-width: 600px) {
+  .monitoring-live-grid { grid-template-columns: 1fr !important; }
+  .profile-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ========= GLOBAL OVERFLOW FIX ========= */
+/* Semua elemen tidak boleh lebih lebar dari layar */
+.page, .inner-page, .card, .stat-card,
+.main-content, .page-body, .topbar,
+.login-card, .auth-right, .auth-page,
+.login-fullpage, .plot-card, .modal-box {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+img, svg, video, iframe, table {
+  max-width: 100%;
+}
+
+/* Pastikan semua grid tidak overflow */
+[style*="display:grid"], [style*="display: grid"] {
+  min-width: 0;
+}
+
+/* Fix login page agar selalu penuh layar */
+.login-fullpage {
+  width: 100vw;
+  min-height: 100vh;
+}
+
+.login-card {
+  width: calc(100% - 32px);
+  max-width: 420px;
+  margin: 0 auto;
+}
+@media (max-width: 380px) {
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-value { font-size: 1.25rem; }
+  .page-body { padding: 10px; }
+  .topbar-title h2 { font-size: 0.875rem; }
+  .login-card { padding: 18px 14px; }
+}
+
+.menu-toggle {
+  display: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1.5px solid var(--grey-200);
+  background: white;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 99;
+}
+
+.sidebar-overlay.show { display: block; }
+
+/* ========= REAL-TIME BLINK ========= */
+.live-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green-500);
+  display: inline-block;
+  animation: blink 1.5s infinite;
+  margin-right: 5px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+/* ========= ALERT BANNER ========= */
+.alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  margin-bottom: 16px;
+}
+
+.alert-banner.warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+.alert-banner.danger { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+.alert-banner.ok { background: var(--green-100); border: 1px solid var(--green-200); color: var(--green-800); }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--grey-300); border-radius: 999px; }
+
+/* ========= TOAST NOTIFIKASI ========= */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 320px;
+  border-left: 4px solid var(--green-500);
+  pointer-events: all;
+  animation: toast-in 0.35s ease;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.toast.danger { border-left-color: var(--danger); }
+.toast.warn    { border-left-color: var(--warn); }
+.toast.info    { border-left-color: var(--info); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(60px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.toast-icon { font-size: 1.3rem; flex-shrink: 0; margin-top: 1px; }
+.toast-body { flex: 1; }
+.toast-body strong { display: block; font-size: 0.8125rem; font-weight: 700; color: var(--grey-900); margin-bottom: 2px; }
+.toast-body p { font-size: 0.75rem; color: var(--grey-500); line-height: 1.4; }
+.toast-close { background: none; border: none; font-size: 1rem; color: var(--grey-400); cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; }
+.toast-close:hover { color: var(--grey-700); }
+
+/* ========= LOGIN FULLPAGE ========= */
+.login-fullpage {
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  background: linear-gradient(135deg, var(--green-900) 0%, var(--green-700) 40%, var(--green-500) 100%);
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.login-fullpage.active {
+  display: flex !important;
+}
+
+.login-bg-decoration {
+  position: absolute;
+  inset: 0;
+  background:
+    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.login-bg-decoration::before {
+  content: '';
+  position: absolute;
+  top: -120px; right: -120px;
+  width: 400px; height: 400px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+}
+
+.login-bg-decoration::after {
+  content: '';
+  position: absolute;
+  bottom: -80px; left: -80px;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+}
+
+.login-card {
+  background: white;
+  border-radius: 20px;
+  padding: 28px 36px 24px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+  position: relative;
+  z-index: 1;
+}
+
+.login-logo {
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.login-logo .logo-icon {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, var(--green-700), var(--green-500));
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px;
+  font-size: 26px;
+  box-shadow: 0 6px 16px rgba(56,160,71,0.3);
+}
+
+.login-logo h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--green-800);
+  letter-spacing: -0.5px;
+}
+
+.login-logo p {
+  color: var(--grey-500);
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+.login-features {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.feature-chip {
+  background: var(--green-50);
+  border: 1px solid var(--green-200);
+  color: var(--green-700);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.login-divider {
+  height: 1px;
+  background: var(--grey-200);
+  margin-bottom: 14px;
+}
+
+.login-form-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--grey-900);
+  margin-bottom: 2px;
+}
+
+.login-form-sub {
+  color: var(--grey-500);
+  font-size: 0.775rem;
+  margin-bottom: 12px;
+}
+
+/* Kompres form di login card */
+.login-card .form-group { margin-bottom: 10px; }
+.login-card .form-group input,
+.login-card .form-group select { padding: 9px 12px; font-size: 1rem; }
+.login-card .btn-primary { padding: 10px; font-size: 0.875rem; margin-top: 2px; }
+.login-card .btn-secondary { padding: 9px; font-size: 0.825rem; margin-top: 6px; }
+.login-card .btn-ghost { padding: 9px; font-size: 0.825rem; margin-top: 6px; }
+.login-card .divider { margin: 10px 0; }
+.login-card .auth-link { margin-top: 12px; font-size: 0.8rem; }
+
+/* ========= MODAL HUBUNGI ADMIN ========= */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 9000;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  backdrop-filter: blur(2px);
+}
+.modal-overlay.active {
+  display: flex;
+}
+.modal-box {
+  background: white;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  overflow: hidden;
+  animation: modal-in 0.25s ease;
+}
+@keyframes modal-in {
+  from { opacity:0; transform: scale(0.94) translateY(10px); }
+  to   { opacity:1; transform: scale(1) translateY(0); }
+}
+.modal-header {
+  background: linear-gradient(135deg, var(--green-800), var(--green-600));
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-header h3 { color: white; font-size: 1rem; font-weight: 700; }
+.modal-header p  { color: rgba(255,255,255,0.7); font-size: 0.78rem; margin-top:2px; }
+.modal-close {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: white;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
+}
+.modal-close:hover { background: rgba(255,255,255,0.25); }
+.modal-body { padding: 24px; }
+.modal-footer { padding: 0 24px 20px; display:flex; gap:10px; justify-content:flex-end; }
+.modal-footer .btn-cancel {
+  padding: 10px 20px;
+  background: var(--grey-100);
+  color: var(--grey-700);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.modal-footer .btn-cancel:hover { background: var(--grey-200); }
+.modal-success {
+  text-align: center;
+  padding: 32px 24px;
+}
+.modal-success .success-icon { font-size: 3rem; margin-bottom: 12px; }
+.modal-success h4 { font-size: 1.05rem; font-weight: 700; color: var(--grey-900); margin-bottom: 6px; }
+.modal-success p  { font-size: 0.8125rem; color: var(--grey-500); }
+.msg-history-item {
+  background: var(--grey-50);
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+}
+.msg-history-item .msg-meta { color: var(--grey-400); font-size: 0.72rem; margin-bottom: 4px; font-family: var(--mono); }
+.msg-history-item .msg-text { color: var(--grey-700); line-height: 1.5; }
+.msg-card {
+  background: white;
+  border: 1px solid var(--grey-200);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  transition: box-shadow 0.2s;
+}
+.msg-card:hover { box-shadow: var(--shadow-md); }
+.msg-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 12px;
+}
+.msg-card-sender strong { font-size: 0.9rem; font-weight: 700; color: var(--grey-900); }
+.msg-card-sender span  { font-size: 0.78rem; color: var(--grey-500); display:block; margin-top:2px; }
+.msg-card-meta { text-align:right; flex-shrink:0; }
+.msg-card-meta .kat-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.kat-badge.bug    { background:#eff6ff; color:#1d4ed8; }
+.kat-badge.fitur  { background:#fffbeb; color:#92400e; }
+.kat-badge.akun   { background:#fef2f2; color:#991b1b; }
+.kat-badge.umum   { background:var(--green-100); color:var(--green-800); }
+.kat-badge.lain   { background:var(--grey-100); color:var(--grey-700); }
+.msg-card-time { font-size:0.72rem; color:var(--grey-400); font-family:var(--mono); }
+.msg-card-body { font-size:0.8375rem; color:var(--grey-700); line-height:1.6; background:var(--grey-50); border-radius:8px; padding:10px 14px; }
+.msg-card-del {
+  margin-top: 10px;
+  text-align: right;
+}
+.msg-card-del button {
+  font-size: 0.75rem;
+  color: var(--danger);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.msg-card-del button:hover { background: #fef2f2; }
+.log-line {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--grey-100);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  line-height: 1.5;
+}
+.log-line:last-child { border-bottom: none; }
+.log-level {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.log-level.ERROR   { background:#fef2f2; color:var(--danger); }
+.log-level.WARNING { background:#fffbeb; color:#92400e; }
+.log-level.INFO    { background:#eff6ff; color:#1d4ed8; }
+.log-time { color:var(--grey-400); flex-shrink:0; font-size:0.72rem; margin-top:2px; }
+.log-msg  { color:var(--grey-700); flex:1; }
+.sensor-status-aktif    { background:var(--green-100);color:var(--green-700); }
+.sensor-status-nonaktif { background:#fef2f2;color:var(--danger); }
+.sensor-status-kalibrasi{ background:#fffbeb;color:#92400e; }
+
+/* ========= SPLASH SCREEN ========= */
+#splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: linear-gradient(145deg, var(--green-900) 0%, var(--green-700) 45%, var(--green-500) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+
+#splash-screen.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-bg-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.07);
+  animation: ring-pulse 4s ease-in-out infinite;
+}
+
+@keyframes ring-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50%       { transform: scale(1.05); opacity: 1; }
+}
+
+.splash-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  animation: splash-in 0.7s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+@keyframes splash-in {
+  from { opacity:0; transform: translateY(30px) scale(0.96); }
+  to   { opacity:1; transform: translateY(0) scale(1); }
+}
+
+.splash-logo {
+  width: 90px;
+  height: 90px;
+  background: rgba(255,255,255,0.12);
+  border: 2px solid rgba(255,255,255,0.2);
+  border-radius: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44px;
+  margin: 0 auto 20px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+  animation: logo-bounce 0.8s 0.3s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+@keyframes logo-bounce {
+  from { opacity:0; transform: scale(0.6) rotate(-8deg); }
+  to   { opacity:1; transform: scale(1) rotate(0deg); }
+}
+
+.splash-app-name {
+  font-size: 2rem;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+}
+
+.splash-tagline {
+  font-size: 0.875rem;
+  color: rgba(255,255,255,0.6);
+  font-weight: 300;
+  margin-bottom: 36px;
+}
+
+.splash-divider {
+  width: 48px;
+  height: 2px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 999px;
+  margin: 0 auto 28px;
+}
+
+.splash-greeting {
+  font-size: 0.875rem;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.splash-username {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 6px;
+  animation: name-in 0.6s 0.5s ease both;
+}
+
+@keyframes name-in {
+  from { opacity:0; transform: translateY(10px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+
+.splash-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.85);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  margin-bottom: 48px;
+  animation: name-in 0.6s 0.65s ease both;
+}
+
+.splash-timer-wrap {
+  width: 260px;
+  margin: 0 auto 20px;
+  animation: name-in 0.6s 0.8s ease both;
+}
+
+.splash-timer-track {
+  height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.splash-timer-bar {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, rgba(255,255,255,0.5), white);
+  border-radius: 999px;
+  transform-origin: left;
+  transform: scaleX(1);
+  transition: transform linear;
+}
+
+.splash-timer-text {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.45);
+  font-family: var(--mono);
+}
+
+.splash-skip-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1.5px solid rgba(255,255,255,0.25);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 11px 32px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.2s;
+  backdrop-filter: blur(6px);
+  animation: name-in 0.6s 0.9s ease both;
+}
+
+.splash-skip-btn:hover {
+  background: rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.4);
+  transform: translateY(-1px);
+}
+
+.splash-features {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 40px;
+  animation: name-in 0.6s 0.75s ease both;
+}
+
+.splash-feat-chip {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.7);
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 4px 11px;
+  border-radius: 999px;
+}
+
+/* ========= KAMERA & GALERI ========= */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+.gallery-card {
+  background: white;
+  border-radius: var(--radius);
+  border: 1px solid var(--grey-200);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.gallery-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--green-300);
+}
+.gallery-thumb {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  background: var(--grey-900);
+  display: block;
+}
+.gallery-thumb-placeholder {
+  width: 100%;
+  aspect-ratio: 4/3;
+  background: linear-gradient(135deg, var(--green-900), var(--green-700));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  opacity: 0.4;
+}
+.gallery-info {
+  padding: 10px 12px;
+}
+.gallery-info .fname {
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  color: var(--grey-700);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.gallery-info .fmeta {
+  font-size: 0.68rem;
+  color: var(--grey-400);
+}
+
+/* ========= DETEKSI PANEN ========= */
+.detection-card {
+  background: white;
+  border-radius: var(--radius);
+  border: 1px solid var(--grey-200);
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  transition: box-shadow 0.2s;
+}
+.detection-card:hover { box-shadow: var(--shadow-md); }
+.detection-thumb {
+  width: 80px;
+  height: 60px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--grey-200);
+}
+.detection-body { flex: 1; min-width: 0; }
+.detection-body strong { display: block; font-size: 0.875rem; font-weight: 700; color: var(--grey-900); margin-bottom: 4px; }
+.detection-body p { font-size: 0.8rem; color: var(--grey-600); line-height: 1.5; }
+.det-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.det-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.det-badge.siap { background: #dcfce7; color: #166534; }
+.det-badge.belum { background: #fef9c3; color: #854d0e; }
+.det-badge.gagal { background: #fee2e2; color: #991b1b; }
+.det-badge.proses { background: #eff6ff; color: #1d4ed8; }
+.det-stat {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.det-stat-item {
+  text-align: center;
+}
+.det-stat-item .dval { font-size: 1.4rem; font-weight: 700; font-family: var(--mono); color: var(--grey-900); }
+.det-stat-item .dlbl { font-size: 0.68rem; color: var(--grey-500); margin-top: 2px; }
+
+/* Image detail modal */
+.img-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 9500;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.img-modal-overlay.active { display: flex; }
+.img-modal-box {
+  background: var(--grey-900);
+  border-radius: 16px;
+  overflow: hidden;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+}
+.img-modal-img {
+  max-width: 80vw;
+  max-height: 70vh;
+  object-fit: contain;
+  display: block;
+}
+.img-modal-footer {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255,255,255,0.05);
+}
+.img-modal-meta { font-size: 0.8rem; font-family: var(--mono); color: rgba(255,255,255,0.7); }
+.img-modal-close {
+  background: rgba(255,255,255,0.12);
+  border: none;
+  color: white;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.img-modal-close:hover { background: rgba(255,255,255,0.22); }
+
+/* ========= SETTINGS ========= */
+.settings-section {
+  background: white;
+  border-radius: var(--radius);
+  border: 1px solid var(--grey-200);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.settings-section-header {
+  padding: 14px 20px;
+  background: var(--grey-50);
+  border-bottom: 1px solid var(--grey-200);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-section-header h3 {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--grey-900);
+}
+.settings-section-header span.sh-icon { font-size: 1.1rem; }
+.settings-row {
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--grey-100);
+  gap: 16px;
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row-left .sr-label { font-size: 0.875rem; font-weight: 600; color: var(--grey-900); }
+.settings-row-left .sr-desc { font-size: 0.775rem; color: var(--grey-500); margin-top: 2px; }
+.settings-row-right { flex-shrink: 0; }
+.settings-input {
+  padding: 8px 12px;
+  border: 1.5px solid var(--grey-200);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-family: var(--mono);
+  color: var(--grey-900);
+  outline: none;
+  min-width: 220px;
+  transition: all 0.2s;
+}
+.settings-input:focus {
+  border-color: var(--green-500);
+  box-shadow: 0 0 0 3px rgba(56,160,71,0.12);
+}
+.settings-btn {
+  padding: 8px 16px;
+  background: var(--green-600);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.settings-btn:hover { background: var(--green-700); }
+.settings-btn.danger { background: var(--danger); }
+.settings-btn.danger:hover { background: #dc2626; }
+.settings-btn.secondary {
+  background: var(--grey-100);
+  color: var(--grey-700);
+  border: 1.5px solid var(--grey-200);
+}
+.settings-btn.secondary:hover { background: var(--grey-200); }
+.settings-toggle {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  cursor: pointer;
+}
+.settings-toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--grey-300);
+  border-radius: 999px;
+  transition: all 0.3s;
+}
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  left: 4px; bottom: 4px;
+  background: white;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+.settings-toggle input:checked + .toggle-slider { background: var(--green-500); }
+.settings-toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+@media (max-width: 600px) {
+  .gallery-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .detection-card { flex-direction: column; }
+  .detection-thumb { width: 100%; height: 120px; }
+  .settings-row { flex-direction: column; align-items: flex-start; }
+  .settings-input { min-width: 100%; width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================= SPLASH SCREEN ============================= -->
+<div id="splash-screen" style="display:none;">
+  <!-- Background rings dekoratif -->
+  <div class="splash-bg-ring" style="width:500px;height:500px;top:-150px;right:-150px;"></div>
+  <div class="splash-bg-ring" style="width:360px;height:360px;bottom:-100px;left:-100px;animation-delay:1s;"></div>
+  <div class="splash-bg-ring" style="width:200px;height:200px;bottom:80px;right:60px;animation-delay:2s;"></div>
+
+  <div class="splash-content">
+    <!-- Logo -->
+    <div class="splash-logo">🌾</div>
+    <div class="splash-app-name">SawahSmart</div>
+    <div class="splash-tagline">Sistem Monitoring Tanaman Padi Cerdas</div>
+    <div class="splash-divider"></div>
+
+    <!-- Sambutan -->
+    <div class="splash-greeting">Selamat Datang Kembali</div>
+    <div class="splash-username" id="splash-name">Pengguna</div>
+    <div class="splash-role-chip">
+      <span id="splash-role-icon">👤</span>
+      <span id="splash-role">-</span>
+    </div>
+
+    <!-- Fitur chips -->
+    <div class="splash-features">
+      <div class="splash-feat-chip">🌡️ Sensor Real-time</div>
+      <div class="splash-feat-chip">📊 Dashboard Cerdas</div>
+      <div class="splash-feat-chip">🔔 Alert Otomatis</div>
+    </div>
+
+    <!-- Timer bar -->
+    <div class="splash-timer-wrap">
+      <div class="splash-timer-track">
+        <div class="splash-timer-bar" id="splash-bar"></div>
+      </div>
+      <div class="splash-timer-text">Memuat dashboard dalam <span id="splash-countdown">3</span> detik...</div>
+    </div>
+
+    <!-- Tombol skip -->
+    <button class="splash-skip-btn" onclick="skipSplash()">
+      Masuk ke Dashboard →
+    </button>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ============================= MODAL: IMAGE DETAIL ============================= -->
+<div class="img-modal-overlay" id="img-modal" onclick="closeImgModal(event)">
+  <div class="img-modal-box">
+    <img id="img-modal-src" class="img-modal-img" src="" alt="Foto Lahan">
+    <div class="img-modal-footer">
+      <div class="img-modal-meta" id="img-modal-meta"></div>
+      <button class="img-modal-close" onclick="document.getElementById('img-modal').classList.remove('active')">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= MODAL: HUBUNGI ADMIN ============================= -->
+<div class="modal-overlay" id="modal-hubungi" onclick="closeModalIfOutside(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <h3>📬 Hubungi Admin</h3>
+        <p>Kirim pesan, pertanyaan, atau laporan masalah</p>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <!-- Form kirim pesan -->
+    <div id="modal-form-view">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Nama Lengkap</label>
+          <input type="text" id="msg-nama" placeholder="Nama Anda">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="msg-email" placeholder="email@domain.com">
+        </div>
+        <div class="form-group">
+          <label>Kategori</label>
+          <select id="msg-kategori">
+            <option value="">-- Pilih Kategori --</option>
+            <option>Pertanyaan Umum</option>
+            <option>Laporan Bug / Error</option>
+            <option>Permintaan Fitur</option>
+            <option>Masalah Akun</option>
+            <option>Lainnya</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Pesan</label>
+          <textarea id="msg-pesan" rows="4" placeholder="Tuliskan pesan Anda di sini..." style="width:100%;padding:10px 14px;border:1.5px solid var(--grey-200);border-radius:var(--radius-sm);font-size:0.875rem;font-family:var(--font);resize:vertical;outline:none;transition:all 0.2s;" onfocus="this.style.borderColor='var(--green-500)';this.style.boxShadow='0 0 0 3px rgba(56,160,71,0.12)'" onblur="this.style.borderColor='var(--grey-200)';this.style.boxShadow='none'"></textarea>
+        </div>
+        <!-- Riwayat pesan sebelumnya -->
+        <div id="msg-history-wrap" style="display:none;">
+          <div style="font-size:0.75rem;font-weight:700;color:var(--grey-500);letter-spacing:0.5px;margin-bottom:8px;">PESAN SEBELUMNYA</div>
+          <div id="msg-history-list" style="max-height:140px;overflow-y:auto;"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeModal()">Batal</button>
+        <button class="btn-primary" style="width:auto;padding:10px 24px;" onclick="kirimPesan()">📤 Kirim Pesan</button>
+      </div>
+    </div>
+
+    <!-- Tampilan sukses -->
+    <div id="modal-success-view" style="display:none;">
+      <div class="modal-success">
+        <div class="success-icon">✅</div>
+        <h4>Pesan Terkirim!</h4>
+        <p>Pesan Anda telah disimpan dan akan ditindaklanjuti oleh admin.<br>Terima kasih telah menghubungi kami.</p>
+        <button class="btn-primary" style="margin-top:20px;width:auto;padding:10px 28px;" onclick="closeModal()">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= MODAL: REGISTER SUKSES ============================= -->
+<div class="modal-overlay" id="modal-reg-sukses">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="modal-header" style="background:linear-gradient(135deg,var(--green-700),var(--green-500));">
+      <div>
+        <h3>🎉 Pendaftaran Berhasil!</h3>
+        <p>Akun Anda telah berhasil dibuat</p>
+      </div>
+    </div>
+    <div style="text-align:center;padding:32px 24px 24px;">
+      <div style="font-size:3.5rem;margin-bottom:14px;">✅</div>
+      <h4 style="font-size:1.05rem;font-weight:700;color:var(--grey-900);margin-bottom:8px;" id="reg-sukses-nama">Selamat, Pengguna!</h4>
+      <p style="font-size:0.8125rem;color:var(--grey-500);line-height:1.6;">Akun Anda sudah aktif dan siap digunakan.<br>Silakan masuk dengan email dan password yang telah Anda daftarkan.</p>
+      <div style="margin-top:20px;background:var(--green-50);border:1px solid var(--green-200);border-radius:10px;padding:12px 16px;text-align:left;">
+        <div style="font-size:0.72rem;font-weight:700;color:var(--grey-500);letter-spacing:0.5px;margin-bottom:6px;">RINGKASAN AKUN</div>
+        <div style="font-size:0.8rem;color:var(--grey-700);display:flex;flex-direction:column;gap:4px;">
+          <div>👤 <span id="reg-sukses-info-nama" style="font-weight:600;">-</span></div>
+          <div>📧 <span id="reg-sukses-info-email" style="font-weight:600;">-</span></div>
+          <div>🏷️ <span id="reg-sukses-info-role" style="font-weight:600;">-</span></div>
+        </div>
+      </div>
+      <div style="margin-top:20px;width:100%;height:4px;background:var(--grey-200);border-radius:999px;overflow:hidden;">
+        <div id="reg-modal-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--green-400),var(--green-600));border-radius:999px;transition:width 2.5s linear;"></div>
+      </div>
+      <p style="font-size:0.72rem;color:var(--grey-400);margin-top:8px;">Mengalihkan ke halaman login...</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= PAGE: LOGIN ============================= -->
+<div id="page-login" class="page active login-fullpage">
+  <div class="login-bg-decoration"></div>
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">🌾</div>
+      <h1>SawahSmart</h1>
+      <p>Sistem Monitoring Tanaman Padi Cerdas</p>
+    </div>
+    <div class="login-features">
+      <div class="feature-chip">🌡️ Sensor Real-time</div>
+      <div class="feature-chip">🔔 Alert Otomatis</div>
+    </div>
+    <div class="login-divider"></div>
+    <div id="login-register-success" style="display:none;background:var(--green-100);border:1px solid var(--green-200);color:var(--green-800);border-radius:var(--radius-sm);padding:11px 14px;font-size:0.8125rem;font-weight:600;text-align:center;margin-bottom:12px;">
+      ✅ Akun berhasil dibuat! Silakan masuk.
+    </div>
+    <h2 class="login-form-title">Selamat Datang 👋</h2>
+    <p class="login-form-sub">Masuk ke akun Anda untuk memantau lahan padi</p>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="text" placeholder="contoh@email.com" id="login-email">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" placeholder="••••••••" id="login-pass">
+    </div>
+    <button class="btn-primary" onclick="doLogin()">🔐 Masuk</button>
+    <button class="btn-secondary" onclick="showPage('page-register')">✏️ Daftar Akun Baru</button>
+    <div class="divider">atau</div>
+    <button class="btn-ghost" onclick="doGuestLogin()">👁️ Masuk sebagai Tamu (View Only)</button>
+    <div class="auth-link">
+      Butuh bantuan? <a href="#" onclick="openModal();return false;">Hubungi Admin</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= PAGE: REGISTER ============================= -->
+<div id="page-register" class="page login-fullpage">
+  <div class="login-bg-decoration"></div>
+  <div class="login-card" style="max-width:440px; overflow:visible;">
+
+    <!-- Tampilan form -->
+    <div id="reg-form-view">
+      <div class="login-logo">
+        <div class="logo-icon">🌾</div>
+        <h1>SawahSmart</h1>
+        <p>Buat akun baru untuk mulai memantau lahan</p>
+      </div>
+      <div class="login-divider"></div>
+      <h2 class="login-form-title">Daftar Akun Baru 📋</h2>
+      <p class="login-form-sub">Isi data di bawah untuk mendaftar</p>
+      <div class="form-group">
+        <label>Nama Lengkap</label>
+        <input type="text" id="reg-nama" placeholder="Nama lengkap Anda">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="contoh@gmail.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="reg-pass" placeholder="Min. 8 karakter" oninput="checkPassStrength(this.value)">
+        <div id="pass-rules" style="margin-top:7px;display:flex;flex-direction:column;gap:3px;">
+          <div id="rule-len"  style="font-size:0.72rem;display:flex;align-items:center;gap:5px;color:var(--grey-400)"><span id="ico-len">○</span> Min. 8 karakter</div>
+          <div id="rule-up"   style="font-size:0.72rem;display:flex;align-items:center;gap:5px;color:var(--grey-400)"><span id="ico-up">○</span> Mengandung huruf kapital (A–Z)</div>
+          <div id="rule-num"  style="font-size:0.72rem;display:flex;align-items:center;gap:5px;color:var(--grey-400)"><span id="ico-num">○</span> Mengandung angka (0–9)</div>
+          <div id="rule-sym"  style="font-size:0.72rem;display:flex;align-items:center;gap:5px;color:var(--grey-400)"><span id="ico-sym">○</span> Mengandung simbol (!@#$...)</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Konfirmasi Password</label>
+        <input type="password" id="reg-pass2" placeholder="Ulangi password">
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="reg-role">
+          <option value="">-- Pilih Role --</option>
+          <option>Petani</option>
+          <option>Pengawas Lahan</option>
+          <option>Teknisi</option>
+          <option>Administrator</option>
+        </select>
+      </div>
+      <button class="btn-primary" onclick="doRegister()">🌱 Daftar Sekarang</button>
+      <div class="auth-link" style="margin-top:14px;">
+        Sudah punya akun? <a onclick="showPage('page-login')" style="cursor:pointer;">Masuk di sini</a>
+      </div>
+    </div>
+
+
+  </div>
+</div>
+
+<!-- ============================= PAGE: APP ============================= -->
+<div id="page-app" class="page app-layout">
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+  
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-sm">🌾</div>
+      <div>
+        <span>SawahSmart</span>
+        <small>v2.4.1</small>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Utama</div>
+      <div class="nav-item active" onclick="showInner('dashboard')">
+        <span class="icon">📊</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showInner('monitoring')">
+        <span class="icon">📡</span> Monitoring Detail
+      </div>
+      <div class="nav-item" onclick="showInner('lahan')">
+        <span class="icon">🌾</span> Lahan / Plot
+      </div>
+      <div class="nav-item" onclick="showInner('kamera')">
+        <span class="icon">📸</span> Kamera &amp; Deteksi
+      </div>
+      <div class="nav-section-label">Info</div>
+      <div class="nav-item" onclick="showInner('notifikasi')">
+        <span class="icon">🔔</span> Notifikasi
+        <span class="nav-badge">3</span>
+      </div>
+      <div class="nav-section-label">Akun</div>
+      <div class="nav-item" onclick="showInner('profile')">
+        <span class="icon">👤</span> Profile
+      </div>
+      <div class="nav-item" onclick="showInner('settings')">
+        <span class="icon">⚙️</span> Pengaturan
+      </div>
+      <div class="nav-section-label admin-only" style="display:none;">Admin</div>
+      <div class="nav-item admin-only" style="display:none;" onclick="showInner('admin')">
+        <span class="icon">🛡️</span> Panel Admin
+        <span class="nav-badge admin-msg-badge" style="display:none;">0</span>
+      </div>
+      <div class="nav-section-label teknisi-only" style="display:none;">Teknisi</div>
+      <div class="nav-item teknisi-only" style="display:none;" onclick="showInner('teknisi')">
+        <span class="icon">🔧</span> Panel Teknisi
+      </div>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar" id="sidebar-avatar">AS</div>
+      <div class="user-info">
+        <strong id="sidebar-name">Ahmad Syukur</strong>
+        <small id="sidebar-role">Petani</small>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main-content">
+    <header class="topbar">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+        <div class="topbar-title">
+          <h2 id="topbar-title">Dashboard</h2>
+          <p id="topbar-sub"><span class="live-dot"></span>Real-time · Diperbarui baru saja</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="topbar-btn" onclick="showInner('notifikasi')" title="Notifikasi">
+          🔔<span class="dot"></span>
+        </button>
+        <button class="topbar-btn" onclick="showInner('profile')" title="Profile">👤</button>
+      </div>
+    </header>
+
+    <div class="page-body">
+
+      <!-- ===== DASHBOARD ===== -->
+      <div class="inner-page active" id="inner-dashboard">
+
+
+        <!-- Stats -->
+        <div class="section-title">Pembacaan Sensor Saat Ini</div>
+        <div class="stats-grid">
+          <div class="stat-card temp">
+            <div class="stat-icon">🌡️</div>
+            <div class="stat-label">Suhu Udara</div>
+            <div class="stat-value" id="db-suhu">--<span class="stat-unit">°C</span></div>
+            <div class="stat-status warn" id="db-suhu-status">⏳ Memuat...</div>
+          </div>
+          <div class="stat-card light">
+            <div class="stat-icon">☀️</div>
+            <div class="stat-label">Intensitas Cahaya</div>
+            <div class="stat-value" id="db-cahaya">--<span class="stat-unit"> lux</span></div>
+            <div class="stat-status ok" id="db-cahaya-status">⏳ Memuat...</div>
+          </div>
+          <div class="stat-card soil">
+            <div class="stat-icon">🌱</div>
+            <div class="stat-label">Kelembapan Tanah</div>
+            <div class="stat-value" id="db-tanah">--<span class="stat-unit">%</span></div>
+            <div class="stat-status ok" id="db-tanah-status">⏳ Memuat...</div>
+          </div>
+          <div class="stat-card water">
+            <div class="stat-icon">💧</div>
+            <div class="stat-label">Kelembapan Udara</div>
+            <div class="stat-value" id="db-kelembapan">--<span class="stat-unit">%</span></div>
+            <div class="stat-status ok" id="db-kelembapan-status">⏳ Memuat...</div>
+          </div>
+        </div>
+
+        <!-- Kontrol Pompa -->
+        <div class="card" style="margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div style="width:44px;height:44px;background:#eff6ff;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;">💧</div>
+            <div>
+              <div style="font-weight:700;font-size:0.9rem;color:var(--grey-900);">Kontrol Pompa Air</div>
+              <div id="db-pompa-status" style="font-size:0.8rem;color:var(--grey-500);margin-top:2px;">⏳ Memuat status...</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <button onclick="togglePompa(true)"
+              style="padding:9px 20px;background:var(--green-600);color:white;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">
+              💧 Nyalakan
+            </button>
+            <button onclick="togglePompa(false)"
+              style="padding:9px 20px;background:var(--grey-100);color:var(--grey-700);border:1.5px solid var(--grey-200);border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">
+              ⏹ Matikan
+            </button>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+          <div class="card">
+            <div class="chart-header">
+              <h3>📈 Tren Suhu & Kelembapan (24 Jam)</h3>
+              <div class="chart-legend">
+                <div class="legend-item"><div class="legend-dot" style="background:#f97316"></div>Suhu</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>Kelembapan</div>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap">
+              <svg class="svg-chart" viewBox="0 0 500 160" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="grad-temp" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#f97316" stop-opacity="0.3"/>
+                    <stop offset="100%" stop-color="#f97316" stop-opacity="0"/>
+                  </linearGradient>
+                  <linearGradient id="grad-hum" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.2"/>
+                    <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <!-- Grid lines -->
+                <line x1="0" y1="40" x2="500" y2="40" stroke="#f3f4f6" stroke-width="1"/>
+                <line x1="0" y1="80" x2="500" y2="80" stroke="#f3f4f6" stroke-width="1"/>
+                <line x1="0" y1="120" x2="500" y2="120" stroke="#f3f4f6" stroke-width="1"/>
+                <!-- Kelembapan area -->
+                <path d="M20,90 C60,85 90,70 140,75 C190,80 220,65 270,60 C320,55 360,70 410,68 C450,66 480,72 500,70 L500,160 L20,160 Z" fill="url(#grad-hum)"/>
+                <path d="M20,90 C60,85 90,70 140,75 C190,80 220,65 270,60 C320,55 360,70 410,68 C450,66 480,72 500,70" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round"/>
+                <!-- Suhu area -->
+                <path d="M20,100 C60,95 90,80 140,85 C190,90 220,75 270,65 C320,55 360,50 410,60 C450,65 480,55 500,50 L500,160 L20,160 Z" fill="url(#grad-temp)"/>
+                <path d="M20,100 C60,95 90,80 140,85 C190,90 220,75 270,65 C320,55 360,50 410,60 C450,65 480,55 500,50" fill="none" stroke="#f97316" stroke-width="2" stroke-linejoin="round"/>
+                <!-- X labels -->
+                <text x="20" y="155" fill="#9ca3af" font-size="9" font-family="'DM Mono',monospace">00:00</text>
+                <text x="115" y="155" fill="#9ca3af" font-size="9" font-family="'DM Mono',monospace">06:00</text>
+                <text x="230" y="155" fill="#9ca3af" font-size="9" font-family="'DM Mono',monospace">12:00</text>
+                <text x="345" y="155" fill="#9ca3af" font-size="9" font-family="'DM Mono',monospace">18:00</text>
+                <text x="458" y="155" fill="#9ca3af" font-size="9" font-family="'DM Mono',monospace">23:59</text>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Plant Status -->
+          <div class="card">
+            <div class="chart-header">
+              <h3>🌱 Status Tanaman</h3>
+            </div>
+            <div style="margin-bottom:16px;">
+              <div class="stat-label" style="margin-bottom:6px;">Fase Pertumbuhan</div>
+              <div class="fase-badge vegetatif">🌿 Fase Vegetatif</div>
+              <div style="font-size:0.75rem;color:var(--grey-500);margin-top:6px;">Hari ke-42 · Estimasi panen 78 hari lagi</div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <div class="stat-label">Health Score</div>
+                <div style="font-family:var(--mono);font-size:0.875rem;font-weight:700;color:var(--green-600);">82/100</div>
+              </div>
+              <div class="health-bar-track">
+                <div class="health-bar-fill" style="width:82%"></div>
+              </div>
+              <div class="health-score-text"><span>0</span><span>Sangat Baik</span><span>100</span></div>
+            </div>
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--grey-100);">
+              <div class="stat-label" style="margin-bottom:8px;">Status Per Plot</div>
+              <div style="display:flex;gap:8px;">
+                <div style="flex:1;background:var(--green-50);border:1px solid var(--green-200);border-radius:8px;padding:10px;text-align:center;">
+                  <div style="font-size:0.7rem;color:var(--grey-500);">Plot A</div>
+                  <div style="font-weight:700;color:var(--green-700);font-family:var(--mono);">85</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Notif -->
+        <div class="section-title">Notifikasi Terbaru</div>
+        <div class="card">
+          <div class="notif-item">
+            <div class="notif-dot ok">✅</div>
+            <div class="notif-content">
+              <strong>Kelembapan tanah kembali normal</strong>
+              <p>Plot A kembali ke rentang optimal (65–75%)</p>
+            </div>
+            <div class="notif-time">08:15</div>
+          </div>
+          <div class="notif-item">
+            <div class="notif-dot info">ℹ️</div>
+            <div class="notif-content">
+              <strong>Pembaruan firmware sensor berhasil</strong>
+              <p>Semua node sensor telah diperbarui ke versi 3.1.2</p>
+            </div>
+            <div class="notif-time">Kemarin</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== MONITORING ===== -->
+      <div class="inner-page" id="inner-monitoring">
+
+        <!-- Kartu live sensor -->
+        <div class="monitoring-live-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+          <div class="card" style="padding:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <span style="font-size:0.8rem;font-weight:700;color:var(--grey-700);">🌡️ Suhu</span>
+              <span class="fase-badge vegetatif" style="font-size:0.65rem;padding:2px 7px;">● LIVE</span>
+            </div>
+            <div style="font-family:var(--mono);font-size:2rem;font-weight:700;color:var(--green-700);">31.4<span style="font-size:0.9rem;color:var(--grey-500);"> °C</span></div>
+            <div style="font-size:0.7rem;color:var(--grey-400);margin-top:4px;">Diperbarui: baru saja</div>
+          </div>
+          <div class="card" style="padding:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <span style="font-size:0.8rem;font-weight:700;color:var(--grey-700);">💧 Kel. Tanah</span>
+              <span class="fase-badge vegetatif" style="font-size:0.65rem;padding:2px 7px;">● LIVE</span>
+            </div>
+            <div style="font-family:var(--mono);font-size:2rem;font-weight:700;color:#3b82f6;">68<span style="font-size:0.9rem;color:var(--grey-500);"> %</span></div>
+            <div style="font-size:0.7rem;color:var(--grey-400);margin-top:4px;">Diperbarui: baru saja</div>
+          </div>
+        </div>
+
+        <!-- Filter riwayat -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="margin-bottom:12px;">
+            <h3 style="font-size:0.9rem;font-weight:700;color:var(--grey-900);">📋 Riwayat Data Sensor</h3>
+          </div>
+
+          <!-- Filter inputs — stack vertikal di mobile -->
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div>
+                <div style="font-size:0.75rem;font-weight:600;color:var(--grey-700);margin-bottom:4px;">Dari:</div>
+                <input type="date" id="filter-dari" style="width:100%;padding:8px 10px;border:1.5px solid var(--grey-200);border-radius:8px;font-size:1rem;font-family:var(--mono);">
+              </div>
+              <div>
+                <div style="font-size:0.75rem;font-weight:600;color:var(--grey-700);margin-bottom:4px;">Sampai:</div>
+                <input type="date" id="filter-sampai" style="width:100%;padding:8px 10px;border:1.5px solid var(--grey-200);border-radius:8px;font-size:1rem;font-family:var(--mono);">
+              </div>
+            </div>
+            <select id="filter-plot" style="width:100%;padding:9px 10px;border:1.5px solid var(--grey-200);border-radius:8px;font-size:1rem;font-family:var(--font);">
+              <option value="">Semua Plot</option>
+              <option value="Plot A">Plot A</option>
+            </select>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <button class="filter-btn" onclick="applyFilter()" style="padding:10px;font-size:0.875rem;">🔍 Tampilkan</button>
+              <button onclick="exportCSV()" style="padding:10px;background:white;color:var(--green-700);border:1.5px solid var(--green-300);border-radius:8px;font-size:0.875rem;font-weight:600;cursor:pointer;">⬇ Export</button>
+            </div>
+          </div>
+
+          <div id="filter-info" style="font-size:0.75rem;color:var(--grey-500);margin-bottom:10px;"></div>
+
+          <!-- Tabel data — tampil sebagai kartu di mobile -->
+          <div id="riwayat-table-wrap"></div>
+          <div id="riwayat-empty" class="hidden" style="text-align:center;padding:32px;color:var(--grey-400);">
+            <div style="font-size:2rem;margin-bottom:8px;">📭</div>
+            <div style="font-size:0.875rem;">Tidak ada data untuk rentang tanggal ini</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== LAHAN ===== -->
+      <div class="inner-page" id="inner-lahan">
+        <div class="section-title">Daftar Lahan / Plot</div>
+        <div class="plot-grid">
+          <div class="plot-card" onclick="showInner('plot-detail', 'Plot A')">
+            <div class="plot-header">
+              <div>
+                <h3>🌾 Plot A</h3>
+                <span>Lahan Utama · Blok A-01</span>
+              </div>
+              <span class="fase-badge vegetatif" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3)">Vegetatif</span>
+            </div>
+            <div class="plot-body">
+              <div class="plot-stat"><span class="key">Luas Lahan</span><span class="val">2.500 m²</span></div>
+              <div class="plot-stat"><span class="key">Varietas Padi</span><span class="val">IR64 Ciherang</span></div>
+              <div class="plot-stat"><span class="key">Tanggal Tanam</span><span class="val mono">17 Feb 2026</span></div>
+              <div class="plot-stat"><span class="key">Suhu Saat Ini</span><span class="val mono">30.8°C</span></div>
+              <div class="plot-stat"><span class="key">Kelembapan Tanah</span><span class="val mono">67%</span></div>
+              <div class="plot-stat"><span class="key">Health Score</span><span class="val mono" style="color:var(--green-600)">85/100</span></div>
+            </div>
+            <div class="plot-footer">
+              <span style="font-size:0.75rem;color:var(--grey-500);">Diperbarui: 11:00 WIB</span>
+              <button class="plot-detail-btn">Lihat Detail →</button>
+            </div>
+          </div>
+
+
+        </div>
+      </div>
+
+      <!-- ===== PLOT DETAIL ===== -->
+      <div class="inner-page" id="inner-plot-detail">
+        <button onclick="showInner('lahan')" style="display:inline-flex;align-items:center;gap:6px;font-size:0.8125rem;font-weight:600;color:var(--green-600);background:none;border:none;cursor:pointer;margin-bottom:16px;">← Kembali ke Lahan</button>
+        <div class="stats-grid" style="margin-bottom:20px;">
+          <div class="stat-card temp">
+            <div class="stat-icon">🌡️</div>
+            <div class="stat-label">Suhu</div>
+            <div class="stat-value" id="pd-suhu">30.8<span class="stat-unit">°C</span></div>
+          </div>
+          <div class="stat-card soil">
+            <div class="stat-icon">🌱</div>
+            <div class="stat-label">Kelembapan Tanah</div>
+            <div class="stat-value" id="pd-kel">67<span class="stat-unit">%</span></div>
+          </div>
+          <div class="stat-card light">
+            <div class="stat-icon">☀️</div>
+            <div class="stat-label">Cahaya</div>
+            <div class="stat-value">4810<span class="stat-unit"> lux</span></div>
+          </div>
+          <div class="stat-card water">
+            <div class="stat-icon">💧</div>
+            <div class="stat-label">Air Tandon</div>
+            <div class="stat-value">82<span class="stat-unit">%</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="chart-header">
+            <h3 id="pd-title">Detail Plot A</h3>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>Parameter</th><th>Nilai</th><th>Min Normal</th><th>Max Normal</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>Suhu Udara</td><td class="mono" id="pd-t1">30.8°C</td><td class="mono">25°C</td><td class="mono">32°C</td><td><span class="stat-status ok" style="display:inline-flex">✓ OK</span></td></tr>
+              <tr><td>Kelembapan Tanah</td><td class="mono">67%</td><td class="mono">60%</td><td class="mono">80%</td><td><span class="stat-status ok" style="display:inline-flex">✓ OK</span></td></tr>
+              <tr><td>Intensitas Cahaya</td><td class="mono">4810 lux</td><td class="mono">3000 lux</td><td class="mono">8000 lux</td><td><span class="stat-status ok" style="display:inline-flex">✓ OK</span></td></tr>
+              <tr><td>Ketinggian Air</td><td class="mono">82%</td><td class="mono">50%</td><td class="mono">95%</td><td><span class="stat-status ok" style="display:inline-flex">✓ OK</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== NOTIFIKASI ===== -->
+      <div class="inner-page" id="inner-notifikasi">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div class="section-title" style="margin:0">Semua Notifikasi</div>
+          <div style="display:flex;gap:8px;">
+            <select style="padding:7px 10px;border:1.5px solid var(--grey-200);border-radius:8px;font-size:0.8rem;font-family:var(--font)">
+              <option>Semua</option>
+              <option>Belum dibaca</option>
+              <option>Peringatan</option>
+              <option>Info</option>
+            </select>
+            <button onclick="alert('✅ Semua notifikasi ditandai sudah dibaca')" style="padding:7px 14px;background:var(--green-600);color:white;border:none;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">Tandai Semua Dibaca</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <div style="font-size:0.75rem;font-weight:700;color:var(--grey-500);margin-bottom:12px;letter-spacing:0.5px;">HARI INI</div>
+          <div class="notif-item">
+            <div class="notif-dot ok">✅</div>
+            <div class="notif-content">
+              <strong>Kelembapan tanah kembali normal — Plot A</strong>
+              <p>Nilai kembali ke rentang optimal (67%). Sistem irigasi otomatis berhasil.</p>
+            </div>
+            <div class="notif-time">08:15</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="font-size:0.75rem;font-weight:700;color:var(--grey-500);margin-bottom:12px;letter-spacing:0.5px;">KEMARIN</div>
+          <div class="notif-item">
+            <div class="notif-dot info">ℹ️</div>
+            <div class="notif-content">
+              <strong>Pembaruan firmware sensor berhasil</strong>
+              <p>Semua node sensor Plot A telah diperbarui ke versi 3.1.2</p>
+            </div>
+            <div class="notif-time">15:30</div>
+          </div>
+          <div class="notif-item">
+            <div class="notif-dot warn">💧</div>
+            <div class="notif-content">
+              <strong>Level air tandon rendah — Plot A</strong>
+              <p>Tandon A turun ke 45%. Pengisian ulang telah dijadwalkan.</p>
+            </div>
+            <div class="notif-time">07:00</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <div class="chart-header"><h3>📧 Pengaturan Email Alert</h3></div>
+          <div class="form-group">
+            <label>Email Penerima Alert</label>
+            <input type="email" id="alert-email" placeholder="email@domain.com">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.8125rem;cursor:pointer;">
+              <input type="checkbox" checked> Suhu kritis
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.8125rem;cursor:pointer;">
+              <input type="checkbox" checked> Kelembapan rendah
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.8125rem;cursor:pointer;">
+              <input type="checkbox"> Cahaya abnormal
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.8125rem;cursor:pointer;">
+              <input type="checkbox" checked> Air tandon rendah
+            </label>
+          </div>
+          <button class="btn-primary" style="max-width:200px;" onclick="alert('✅ Pengaturan email alert disimpan!')">💾 Simpan Pengaturan</button>
+        </div>
+      </div>
+
+      <!-- ===== PROFILE ===== -->
+      <div class="inner-page" id="inner-profile">
+        <div style="display:grid;grid-template-columns:320px 1fr;gap:20px;" class="profile-grid">
+          <div>
+            <div class="card" style="text-align:center;">
+              <div class="profile-avatar-big" id="profile-avatar">AS</div>
+              <h3 id="profile-name" style="font-size:1.1rem;font-weight:700;">Ahmad Syukur</h3>
+              <div id="profile-role-badge" class="role-badge" style="margin:8px auto;display:inline-block;">Petani</div>
+              <div style="font-size:0.8rem;color:var(--grey-500);margin-top:4px;" id="profile-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="0d6c65606c694d7e6c7a6c65236e6260">[email&#160;protected]</a></div>
+              <button class="btn-logout" onclick="doLogout()">🚪 Keluar dari Akun</button>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="chart-header"><h3>ℹ️ Informasi Akun</h3></div>
+              <div class="profile-info-row"><span class="key">Nama Lengkap</span><span class="val" id="pi-nama">Ahmad Syukur</span></div>
+              <div class="profile-info-row"><span class="key">Email</span><span class="val" id="pi-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="ee8f86838f8aae9d8f998f86c08d8183">[email&#160;protected]</a></span></div>
+              <div class="profile-info-row"><span class="key">Role</span><span class="val"><span class="role-badge" id="pi-role">Petani</span></span></div>
+              <div class="profile-info-row"><span class="key">Status Akun</span><span class="val"><span class="stat-status ok" style="display:inline-flex">✓ Aktif</span></span></div>
+              <div class="profile-info-row"><span class="key">Bergabung Sejak</span><span class="val mono" id="pi-bergabung">-</span></div>
+              <div class="profile-info-row"><span class="key">Login Terakhir</span><span class="val mono" id="pi-lastlogin">-</span></div>
+            </div>
+            <div class="card" style="margin-top:16px;">
+              <div class="chart-header"><h3>✏️ Edit Profil</h3></div>
+              <div class="form-group">
+                <label>Nama Lengkap</label>
+                <input type="text" id="edit-nama" value="Ahmad Syukur">
+              </div>
+              <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="edit-email" value="ahmad@sawah.com">
+              </div>
+              <div class="form-group">
+                <label>Password Baru (opsional)</label>
+                <input type="password" placeholder="Kosongkan jika tidak ingin mengubah">
+              </div>
+              <button class="btn-primary" style="max-width:180px;" onclick="saveProfile()">💾 Simpan Perubahan</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ADMIN PANEL ===== -->
+      <div class="inner-page" id="inner-admin">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <div>
+            <div class="section-title" style="margin:0 0 4px;">Panel Administrator</div>
+            <div style="font-size:0.8rem;color:var(--grey-500);">Kelola pesan masuk dari pengguna</div>
+          </div>
+          <button onclick="loadAdminMessages()" style="padding:8px 16px;background:var(--green-600);color:white;border:none;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">🔄 Refresh</button>
+        </div>
+
+        <!-- Statistik singkat -->
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:20px;" id="admin-stats">
+          <div class="card" style="text-align:center;padding:16px;">
+            <div style="font-size:1.8rem;font-weight:700;color:var(--green-700);font-family:var(--mono);" id="stat-total">0</div>
+            <div style="font-size:0.75rem;color:var(--grey-500);margin-top:4px;">Total Pesan</div>
+          </div>
+          <div class="card" style="text-align:center;padding:16px;">
+            <div style="font-size:1.8rem;font-weight:700;color:var(--info);font-family:var(--mono);" id="stat-bug">0</div>
+            <div style="font-size:0.75rem;color:var(--grey-500);margin-top:4px;">Laporan Bug</div>
+          </div>
+          <div class="card" style="text-align:center;padding:16px;">
+            <div style="font-size:1.8rem;font-weight:700;color:var(--warn);font-family:var(--mono);" id="stat-fitur">0</div>
+            <div style="font-size:0.75rem;color:var(--grey-500);margin-top:4px;">Permintaan Fitur</div>
+          </div>
+          <div class="card" style="text-align:center;padding:16px;">
+            <div style="font-size:1.8rem;font-weight:700;color:var(--danger);font-family:var(--mono);" id="stat-akun">0</div>
+            <div style="font-size:0.75rem;color:var(--grey-500);margin-top:4px;">Masalah Akun</div>
+          </div>
+        </div>
+
+        <!-- Filter & search -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="admin-search" placeholder="🔍 Cari nama / email / pesan..." oninput="loadAdminMessages()"
+              style="flex:1;min-width:200px;padding:9px 14px;border:1.5px solid var(--grey-200);border-radius:8px;font-size:0.85rem;font-family:var(--font);outline:none;">
+            <select id="admin-filter-kat" onchange="loadAdminMessages()"
+              style="padding:9px 12px;border:1.5px solid var(--grey-200);border-radius:8px;font-size:0.85rem;font-family:var(--font);">
+              <option value="">Semua Kategori</option>
+              <option>Pertanyaan Umum</option>
+              <option>Laporan Bug / Error</option>
+              <option>Permintaan Fitur</option>
+              <option>Masalah Akun</option>
+              <option>Lainnya</option>
+            </select>
+            <button onclick="exportPesanCSV()" style="padding:9px 16px;background:white;color:var(--green-700);border:1.5px solid var(--green-300);border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">⬇ Export CSV</button>
+          </div>
+        </div>
+
+        <!-- Daftar pesan -->
+        <div id="admin-msg-list">
+          <div style="text-align:center;padding:48px;color:var(--grey-400);">
+            <div style="font-size:2.5rem;margin-bottom:10px;">📭</div>
+            <div>Belum ada pesan masuk</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PANEL TEKNISI ===== -->
+      <div class="inner-page" id="inner-teknisi">
+
+        <!-- Sub tab -->
+        <div class="sub-tabs" style="margin-bottom:20px;">
+          <button class="sub-tab active" onclick="switchTeknisiTab(this,'ttab-sensor')">⚙️ Kelola Sensor</button>
+          <button class="sub-tab" onclick="switchTeknisiTab(this,'ttab-log')">📋 Log Error & Gangguan</button>
+        </div>
+
+        <!-- ===== TAB: KELOLA SENSOR ===== -->
+        <div id="ttab-sensor">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div class="section-title" style="margin:0;">Daftar Node Sensor</div>
+            <button onclick="showTambahSensor()" style="padding:8px 16px;background:var(--green-600);color:white;border:none;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">+ Tambah Sensor</button>
+          </div>
+
+          <!-- Form tambah/edit sensor -->
+          <div id="sensor-form-wrap" class="card hidden" style="margin-bottom:16px;border:2px solid var(--green-300);">
+            <div class="chart-header"><h3 id="sensor-form-title">➕ Tambah Sensor Baru</h3></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="form-group">
+                <label>Nama Sensor</label>
+                <input type="text" id="sf-nama" placeholder="cth: Node Suhu A1">
+              </div>
+              <div class="form-group">
+                <label>Tipe Sensor</label>
+                <select id="sf-tipe">
+                  <option value="">-- Pilih Tipe --</option>
+                  <option>Suhu & Kelembapan (DHT22)</option>
+                  <option>Cahaya (BH1750)</option>
+                  <option>Kelembapan Tanah (FC-28)</option>
+                  <option>Ketinggian Air (Ultrasonic)</option>
+                  <option>Kamera (ESP32-CAM)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Lokasi / Plot</label>
+                <select id="sf-plot">
+                  <option>Plot A</option>
+                  <option>Umum</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Lokasi Pemasangan</label>
+                <input type="text" id="sf-ip" placeholder="cth: Pojok Utara Plot A">
+              </div>
+              <div class="form-group">
+                <label>Interval Baca (detik)</label>
+                <input type="number" id="sf-interval" value="15" min="5" max="3600">
+              </div>
+              <div class="form-group">
+                <label>Status</label>
+                <select id="sf-status">
+                  <option>Aktif</option>
+                  <option>Nonaktif</option>
+                  <option>Kalibrasi</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:4px;">
+              <button class="btn-primary" style="max-width:160px;" onclick="simpanSensor()">💾 Simpan</button>
+              <button onclick="tutupFormSensor()" style="padding:10px 20px;background:var(--grey-100);color:var(--grey-700);border:none;border-radius:var(--radius-sm);font-weight:600;cursor:pointer;">Batal</button>
+            </div>
+          </div>
+
+          <!-- Tabel sensor -->
+          <div class="card" id="sensor-table-wrap">
+            <div style="overflow-x:auto;" class="sensor-desktop-view">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Nama Sensor</th>
+                    <th>Tipe</th>
+                    <th>Plot</th>
+                    <th>Lokasi</th>
+                    <th>Interval</th>
+                    <th>Status</th>
+                    <th>Terakhir Aktif</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="sensor-tbody"></tbody>
+              </table>
+            </div>
+            <div class="sensor-mobile-view" id="sensor-cards-mobile" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- ===== TAB: LOG ERROR ===== -->
+        <div id="ttab-log" class="hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div class="section-title" style="margin:0;">Log Error & Gangguan Sistem</div>
+            <div style="display:flex;gap:8px;">
+              <select id="log-filter" onchange="renderLog()" style="padding:7px 12px;border:1.5px solid var(--grey-200);border-radius:8px;font-size:0.8rem;font-family:var(--font);">
+                <option value="">Semua Level</option>
+                <option value="ERROR">ERROR</option>
+                <option value="WARNING">WARNING</option>
+                <option value="INFO">INFO</option>
+              </select>
+              <button onclick="clearLog()" style="padding:7px 14px;background:white;color:var(--danger);border:1.5px solid #fecaca;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;">🗑 Hapus Log</button>
+            </div>
+          </div>
+          <div class="card">
+            <div id="log-list" style="font-family:var(--mono);font-size:0.78rem;"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ===== KAMERA & DETEKSI ===== -->
+      <div class="inner-page" id="inner-kamera">
+
+        <!-- Sub tabs -->
+        <div class="sub-tabs" style="margin-bottom:20px;">
+          <button class="sub-tab active" onclick="switchSubTab(this,'ktab-galeri')">📷 Galeri Foto</button>
+          <button class="sub-tab" onclick="switchSubTab(this,'ktab-deteksi')">🌾 Hasil Deteksi</button>
+        </div>
+
+        <!-- Tab: Galeri Foto -->
+        <div id="ktab-galeri">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+            <div>
+              <div style="font-size:0.875rem;font-weight:700;color:var(--grey-900);">Galeri Foto ESP32-CAM</div>
+              <div style="font-size:0.775rem;color:var(--grey-500);margin-top:2px;">50 foto terbaru dari lahan</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button onclick="loadImageGallery()" class="settings-btn secondary">🔄 Refresh</button>
+              <button onclick="triggerCapture()" class="settings-btn">📸 Ambil Foto</button>
+            </div>
+          </div>
+
+          <!-- Status Cloud Run -->
+          <div id="gcr-status-bar" style="display:none;" class="alert-banner info" style="margin-bottom:16px;">
+            <span id="gcr-status-msg">Menghubungkan ke Cloud Run...</span>
+          </div>
+
+          <!-- Stats baris -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
+            <div class="card" style="text-align:center;padding:14px;">
+              <div style="font-size:1.6rem;font-weight:700;font-family:var(--mono);color:var(--grey-900);" id="gal-count">--</div>
+              <div style="font-size:0.72rem;color:var(--grey-500);margin-top:3px;">Total Foto</div>
+            </div>
+            <div class="card" style="text-align:center;padding:14px;">
+              <div style="font-size:1.6rem;font-weight:700;font-family:var(--mono);color:var(--green-600);" id="gal-latest-time">--</div>
+              <div style="font-size:0.72rem;color:var(--grey-500);margin-top:3px;">Foto Terakhir</div>
+            </div>
+            <div class="card" style="text-align:center;padding:14px;">
+              <div style="font-size:1.6rem;font-weight:700;font-family:var(--mono);color:var(--info);" id="gal-device">--</div>
+              <div style="font-size:0.72rem;color:var(--grey-500);margin-top:3px;">Device ID</div>
+            </div>
+          </div>
+
+          <div id="gallery-loading" style="text-align:center;padding:40px;color:var(--grey-400);">
+            <div style="font-size:2rem;margin-bottom:10px;">⏳</div>
+            <div>Memuat galeri...</div>
+          </div>
+          <div class="gallery-grid" id="gallery-grid" style="display:none;"></div>
+          <div id="gallery-empty" style="display:none;text-align:center;padding:48px;color:var(--grey-400);">
+            <div style="font-size:2.5rem;margin-bottom:10px;">📷</div>
+            <div style="font-weight:600;margin-bottom:4px;">Belum ada foto</div>
+            <div style="font-size:0.8rem;">ESP32-CAM belum mengirim foto. Pastikan perangkat menyala dan terhubung WiFi.</div>
+          </div>
+        </div>
+
+        <!-- Tab: Hasil Deteksi -->
+        <div id="ktab-deteksi" class="hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+            <div>
+              <div style="font-size:0.875rem;font-weight:700;color:var(--grey-900);">Hasil Deteksi Kesiapan Panen</div>
+              <div style="font-size:0.775rem;color:var(--grey-500);margin-top:2px;">Analisis AI dari foto lahan</div>
+            </div>
+            <button onclick="loadDetectionResults()" class="settings-btn secondary">🔄 Refresh</button>
+          </div>
+
+          <!-- Ringkasan deteksi -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+            <div class="card" style="text-align:center;padding:14px;">
+              <div style="font-size:1.6rem;font-weight:700;font-family:var(--mono);color:var(--grey-900);" id="det-total">--</div>
+              <div style="font-size:0.72rem;color:var(--grey-500);margin-top:3px;">Total Analisis</div>
+            </div>
+            <div class="card" style="text-align:center;padding:14px;">
+              <div style="font-size:1.6rem;font-weight:700;font-family:var(--mono);color:#16a34a;" id="det-siap">--</div>
+              <div style="font-size:0.72rem;color:var(--grey-500);margin-top:3px;">Siap Panen</div>
+            </div>
+            <div class="card" style="text-align:center;padding:14px;">
+              <div style="font-size:1.6rem;font-weight:700;font-family:var(--mono);color:#d97706;" id="det-belum">--</div>
+              <div style="font-size:0.72rem;color:var(--grey-500);margin-top:3px;">Belum Siap</div>
+            </div>
+            <div class="card" style="text-align:center;padding:14px;">
+              <div style="font-size:1.6rem;font-weight:700;font-family:var(--mono);color:var(--info);" id="det-confidence">--%</div>
+              <div style="font-size:0.72rem;color:var(--grey-500);margin-top:3px;">Rata-rata Konfiden</div>
+            </div>
+          </div>
+
+          <div id="detection-loading" style="text-align:center;padding:40px;color:var(--grey-400);">
+            <div style="font-size:2rem;margin-bottom:10px;">⏳</div>
+            <div>Memuat hasil deteksi...</div>
+          </div>
+          <div id="detection-list"></div>
+          <div id="detection-empty" style="display:none;text-align:center;padding:48px;color:var(--grey-400);">
+            <div style="font-size:2.5rem;margin-bottom:10px;">🌾</div>
+            <div style="font-weight:600;margin-bottom:4px;">Belum ada hasil deteksi</div>
+            <div style="font-size:0.8rem;">Deteksi akan muncul setelah foto diproses oleh sistem AI.</div>
+          </div>
+        </div>
+
+      </div><!-- /inner-kamera -->
+
+      <!-- ===== PENGATURAN ===== -->
+      <div class="inner-page" id="inner-settings">
+
+        <!-- Cloud Run / GCS -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="sh-icon">☁️</span>
+            <h3>Cloud Run &amp; Kamera</h3>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">URL Cloud Run</div>
+              <div class="sr-desc">Endpoint untuk menerima foto dari ESP32-CAM</div>
+            </div>
+            <div class="settings-row-right" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input class="settings-input" type="url" id="set-cr-url" placeholder="https://upload-padi-xxx.a.run.app">
+              <button class="settings-btn" onclick="saveCloudRunUrl()">💾 Simpan</button>
+              <button class="settings-btn secondary" onclick="testCloudRunConnection()">🔗 Tes</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">Status Koneksi</div>
+              <div class="sr-desc">Hasil tes terakhir ke Cloud Run</div>
+            </div>
+            <div class="settings-row-right">
+              <span id="cr-conn-status" style="font-size:0.8rem;font-weight:600;color:var(--grey-400);">— Belum dites</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">Interval Capture</div>
+              <div class="sr-desc">Seberapa sering ESP32-CAM mengambil foto</div>
+            </div>
+            <div class="settings-row-right">
+              <select class="settings-input" id="set-interval" style="min-width:160px;" onchange="saveInterval()">
+                <option value="10000">10 detik</option>
+                <option value="30000">30 detik</option>
+                <option value="60000">1 menit</option>
+                <option value="300000">5 menit</option>
+                <option value="600000">10 menit</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Firebase -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="sh-icon">🔥</span>
+            <h3>Firebase Realtime Database</h3>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">Project ID</div>
+              <div class="sr-desc">Proyek Firebase yang digunakan</div>
+            </div>
+            <div class="settings-row-right">
+              <span style="font-family:var(--mono);font-size:0.8rem;color:var(--grey-700);">sawahsmart</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">Region</div>
+              <div class="sr-desc">Region database Firebase</div>
+            </div>
+            <div class="settings-row-right">
+              <span style="font-family:var(--mono);font-size:0.8rem;color:var(--grey-700);">asia-southeast1</span>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">Status Firebase</div>
+              <div class="sr-desc">Koneksi ke Realtime Database</div>
+            </div>
+            <div class="settings-row-right">
+              <span id="fb-conn-status" style="font-size:0.8rem;font-weight:600;color:var(--grey-400);">⏳ Mengecek...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notifikasi -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="sh-icon">🔔</span>
+            <h3>Notifikasi</h3>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">Notifikasi Browser</div>
+              <div class="sr-desc">Peringatan kondisi lahan &amp; pompa otomatis</div>
+            </div>
+            <div class="settings-row-right">
+              <button class="settings-btn" onclick="requestNotifPermission()" id="notif-perm-btn">🔔 Aktifkan</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">Status Izin</div>
+              <div class="sr-desc">Izin notifikasi dari browser</div>
+            </div>
+            <div class="settings-row-right">
+              <span id="notif-perm-status" style="font-size:0.8rem;font-weight:600;">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ESP32 REST API -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="sh-icon">📡</span>
+            <h3>ESP32 REST API (Ngrok)</h3>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">URL Ngrok ESP32</div>
+              <div class="sr-desc">Untuk kontrol pompa langsung via REST API</div>
+            </div>
+            <div class="settings-row-right" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input class="settings-input" type="url" id="set-ngrok-url" placeholder="https://xxxx.ngrok-free.app">
+              <button class="settings-btn" onclick="saveNgrokUrl()">💾 Simpan</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Manajemen Data -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="sh-icon">🗄️</span>
+            <h3>Manajemen Data</h3>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">Export Data Sensor</div>
+              <div class="sr-desc">Unduh semua data sensor sebagai JSON</div>
+            </div>
+            <div class="settings-row-right">
+              <button class="settings-btn secondary" onclick="exportAllData()">📥 Export JSON</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">Hapus Data Lokal</div>
+              <div class="sr-desc">Hapus semua cache &amp; data tersimpan di browser</div>
+            </div>
+            <div class="settings-row-right">
+              <button class="settings-btn danger" onclick="clearAllData()">🗑️ Hapus Semua</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Info Aplikasi -->
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <span class="sh-icon">ℹ️</span>
+            <h3>Tentang Aplikasi</h3>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left"><div class="sr-label">Versi Aplikasi</div></div>
+            <div class="settings-row-right"><span style="font-family:var(--mono);font-size:0.8rem;color:var(--grey-600);">v2.5.0</span></div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left"><div class="sr-label">Platform</div></div>
+            <div class="settings-row-right"><span style="font-size:0.8rem;color:var(--grey-600);">PWA · IoT · Firebase · GCS</span></div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="sr-label">Install sebagai App</div>
+              <div class="sr-desc">Pasang SawahSmart di layar utama perangkat</div>
+            </div>
+            <div class="settings-row-right">
+              <button class="settings-btn secondary" id="pwa-install-btn" onclick="installPWA()" style="display:none;">📲 Install PWA</button>
+              <span id="pwa-install-status" style="font-size:0.8rem;color:var(--grey-500);">Buka di browser mobile untuk install</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /inner-settings -->
+
+    </div><!-- /page-body -->
+  </main>
+</div><!-- /page-app -->
+
+<script>
+// ==================== STATE ====================
+// Akun tersimpan di localStorage agar tetap ada saat browser ditutup/dibuka
+function loadAccounts() {
+  try { return JSON.parse(localStorage.getItem('sawahsmart_accounts') || '[]'); }
+  catch (e) { return []; }
+}
+function saveAccounts(accounts) {
+  localStorage.setItem('sawahsmart_accounts', JSON.stringify(accounts));
+}
+
+let registeredAccounts = loadAccounts();
+let currentUser = null;
+
+// ==================== HELPER ====================
+function formatDate(dateObj) {
+  const opts = { day:'2-digit', month:'short', year:'numeric' };
+  return dateObj.toLocaleDateString('id-ID', opts).replace(/\./g,'');
+}
+
+function formatDateTime(dateObj) {
+  const d = formatDate(dateObj);
+  const t = dateObj.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+  return d + ' · ' + t;
+}
+
+// ==================== PAGE NAVIGATION ====================
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function showInner(id, param) {
+  document.querySelectorAll('.inner-page').forEach(p => p.classList.remove('active'));
+  
+  // Init filter monitoring saat dibuka
+  if (id === 'monitoring') setTimeout(initMonitoringFilter, 50);
+  if (id === 'admin') setTimeout(loadAdminMessages, 50);
+  if (id === 'teknisi') setTimeout(initTeknisi, 50);
+  if (id === 'kamera') setTimeout(initKameraPage, 50);
+  if (id === 'settings') setTimeout(initSettings, 50);
+
+  const titles = {
+    dashboard: ['Dashboard', 'Ringkasan kondisi lahan hari ini'],
+    monitoring: ['Monitoring Detail', 'Data sensor & kamera live'],
+    lahan: ['Lahan / Plot', 'Kelola dan pantau semua plot'],
+    notifikasi: ['Notifikasi', 'Peringatan & informasi sistem'],
+    profile: ['Profile', 'Pengaturan akun Anda'],
+    admin: ['Panel Admin', 'Kelola pesan masuk pengguna'],
+    teknisi: ['Panel Teknisi', 'Kelola sensor & log sistem'],
+    kamera: ['Kamera & Deteksi', 'Galeri foto ESP32-CAM & hasil deteksi panen'],
+    settings: ['Pengaturan', 'Konfigurasi sistem & aplikasi'],
+    'plot-detail': [param + ' — Detail', 'Data lengkap per plot']
+  };
+
+  const inner = document.getElementById('inner-' + id);
+  if (inner) inner.classList.add('active');
+
+  if (titles[id]) {
+    document.getElementById('topbar-title').textContent = titles[id][0];
+    document.getElementById('topbar-sub').innerHTML = `<span class="live-dot"></span>${titles[id][1]}`;
+  }
+
+  // Update sidebar active
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const map = { dashboard:0, monitoring:1, lahan:2, 'plot-detail':2, kamera:3, notifikasi:4, profile:5, settings:6, admin:7, teknisi:8 };
+  const navItems = document.querySelectorAll('.nav-item');
+  if (map[id] !== undefined && navItems[map[id]]) navItems[map[id]].classList.add('active');
+
+  // Plot detail
+  if (id === 'plot-detail') {
+    document.getElementById('pd-title').textContent = 'Detail ' + param;
+    document.getElementById('pd-suhu').innerHTML = '30.8<span class="stat-unit">°C</span>';
+    document.getElementById('pd-kel').innerHTML = '67<span class="stat-unit">%</span>';
+  }
+
+  closeSidebar();
+}
+
+// ==================== SUB TABS ====================
+function switchSubTab(btn, tabId) {
+  const innerPage = btn.closest('.inner-page');
+  innerPage.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  innerPage.querySelectorAll('[id^="mtab-"], [id^="ktab-"]').forEach(el => el.classList.add('hidden'));
+  const target = document.getElementById(tabId);
+  if (target) target.classList.remove('hidden');
+}
+
+// ==================== AUTH ====================
+function checkPassStrength(val) {
+  const rules = {
+    len: val.length >= 8,
+    up:  /[A-Z]/.test(val),
+    num: /[0-9]/.test(val),
+    sym: /[^A-Za-z0-9]/.test(val)
+  };
+  Object.keys(rules).forEach(key => {
+    const ico = document.getElementById('ico-' + key);
+    const row = document.getElementById('rule-' + key);
+    if (!ico || !row) return;
+    if (rules[key]) {
+      ico.textContent = '✓';
+      row.style.color = 'var(--green-600)';
+      row.style.fontWeight = '600';
+    } else {
+      ico.textContent = '○';
+      row.style.color = 'var(--grey-400)';
+      row.style.fontWeight = 'normal';
+    }
+  });
+}
+
+function doRegister() {
+  const nama  = document.getElementById('reg-nama').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass  = document.getElementById('reg-pass').value;
+  const pass2 = document.getElementById('reg-pass2').value;
+  const role  = document.getElementById('reg-role').value;
+
+  if (!nama || !email || !pass || !pass2 || !role) {
+    alert('⚠️ Harap isi semua kolom!'); return;
+  }
+  if (pass.length < 8) {
+    alert('⚠️ Password minimal 8 karakter!'); return;
+  }
+  if (!/[A-Z]/.test(pass)) {
+    alert('⚠️ Password harus mengandung minimal 1 huruf kapital (A–Z)!'); return;
+  }
+  if (!/[0-9]/.test(pass)) {
+    alert('⚠️ Password harus mengandung minimal 1 angka (0–9)!'); return;
+  }
+  if (!/[^A-Za-z0-9]/.test(pass)) {
+    alert('⚠️ Password harus mengandung minimal 1 simbol (!@#$% dll)!'); return;
+  }
+  if (pass !== pass2) {
+    alert('⚠️ Konfirmasi password tidak cocok!'); return;
+  }
+  if (registeredAccounts.find(a => a.email === email)) {
+    alert('⚠️ Email sudah terdaftar!'); return;
+  }
+
+  registeredAccounts.push({ name: nama, email, password: pass, role, joinedAt: new Date().toISOString() });
+  saveAccounts(registeredAccounts);
+
+  // Isi info di modal sukses
+  document.getElementById('reg-sukses-nama').textContent   = 'Selamat, ' + nama + '!';
+  document.getElementById('reg-sukses-info-nama').textContent  = nama;
+  document.getElementById('reg-sukses-info-email').textContent = email;
+  document.getElementById('reg-sukses-info-role').textContent  = role;
+
+  // Tampilkan modal
+  const modal = document.getElementById('modal-reg-sukses');
+  modal.classList.add('active');
+
+  // Jalankan progress bar
+  setTimeout(() => {
+    document.getElementById('reg-modal-bar').style.width = '100%';
+  }, 80);
+
+  // Setelah 2.8 detik: tutup modal, reset form, pindah ke login
+  setTimeout(() => {
+    modal.classList.remove('active');
+    document.getElementById('reg-modal-bar').style.width = '0%';
+
+    // Reset form
+    ['reg-nama','reg-email','reg-pass','reg-pass2'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('reg-role').value = '';
+    checkPassStrength(''); // reset indikator
+
+    // Banner sukses di halaman login
+    const banner = document.getElementById('login-register-success');
+    if (banner) banner.style.display = 'block';
+
+    showPage('page-login');
+  }, 2900);
+}
+
+function doLogin() {
+  const email = document.getElementById('login-email')?.value.trim() || '';
+  const pass  = document.getElementById('login-pass')?.value || '';
+
+  if (!email || !pass) {
+    alert('⚠️ Harap isi email dan password terlebih dahulu!');
+    return;
+  }
+
+  const account = registeredAccounts.find(a => a.email === email && a.password === pass);
+  if (!account) {
+    alert('⚠️ Email atau password salah, atau akun belum terdaftar!');
+    return;
+  }
+
+  const now = new Date();
+  const lastLogin = account.lastLogin ? new Date(account.lastLogin) : null;
+  account.lastLogin = now.toISOString();
+  saveAccounts(registeredAccounts); // simpan lastLogin terbaru
+
+  currentUser = {
+    name: account.name,
+    email: account.email,
+    role: account.role,
+    joinedAt: account.joinedAt,
+    lastLogin: now,
+    prevLastLogin: lastLogin,
+    isGuest: false
+  };
+
+  initApp();
+  showPage('page-app');
+  showInner('dashboard');
+  showSplash();
+}
+
+function doGuestLogin() {
+  currentUser = { name: 'Tamu', email: '-', role: 'Guest (View Only)', isGuest: true, joinedAt: new Date(), lastLogin: new Date() };
+  initApp();
+  showPage('page-app');
+  showInner('dashboard');
+  showSplash();
+}
+
+function doLogout() {
+  if (confirm('Apakah Anda yakin ingin keluar?')) {
+    showPage('page-login');
+  }
+}
+
+function initApp() {
+  const initials = currentUser.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('sidebar-avatar').textContent = initials;
+  document.getElementById('sidebar-name').textContent = currentUser.name;
+  document.getElementById('sidebar-role').textContent = currentUser.role;
+  document.getElementById('profile-avatar').textContent = initials;
+  document.getElementById('profile-name').textContent = currentUser.name;
+  document.getElementById('profile-email').textContent = currentUser.email;
+  document.getElementById('profile-role-badge').textContent = currentUser.role;
+  document.getElementById('pi-nama').textContent = currentUser.name;
+  document.getElementById('pi-email').textContent = currentUser.email;
+  document.getElementById('pi-role').textContent = currentUser.role;
+
+  // Email alert sesuai email login
+  const alertEmailEl = document.getElementById('alert-email');
+  if (alertEmailEl) alertEmailEl.value = currentUser.isGuest ? '-' : currentUser.email;
+
+  // Tanggal dinamis
+  if (currentUser.joinedAt) {
+    document.getElementById('pi-bergabung').textContent = formatDate(new Date(currentUser.joinedAt));
+  }
+  const loginDisplay = currentUser.prevLastLogin
+    ? formatDateTime(new Date(currentUser.prevLastLogin))
+    : formatDateTime(new Date(currentUser.lastLogin));
+  document.getElementById('pi-lastlogin').textContent = loginDisplay;
+
+  // Edit profil - isi dari nama asli saat daftar
+  if (document.getElementById('edit-nama')) document.getElementById('edit-nama').value = currentUser.name;
+  if (document.getElementById('edit-email')) document.getElementById('edit-email').value = currentUser.email;
+
+  // Tampilkan menu admin hanya untuk role Administrator
+  const isAdmin = currentUser.role === 'Administrator';
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = isAdmin ? '' : 'none';
+  });
+  if (isAdmin) updateAdminBadge();
+
+  // Tampilkan menu teknisi hanya untuk role Teknisi
+  const isTeknisi = currentUser.role === 'Teknisi';
+  document.querySelectorAll('.teknisi-only').forEach(el => {
+    el.style.display = isTeknisi ? '' : 'none';
+  });
+
+  // Tampilkan notifikasi setelah login
+  if (!currentUser.isGuest) {
+    setTimeout(() => showToast('info',   'ℹ️', 'Pembaruan firmware berhasil', 'Semua node sensor diperbarui ke versi 3.1.2.'), 800);
+  }
+}
+
+// ==================== SPLASH SCREEN ====================
+let splashTimer = null;
+let splashCountdownInterval = null;
+
+function roleIcon(role) {
+  const map = {
+    'Administrator': '🛡️',
+    'Teknisi': '🔧',
+    'Petani': '🌾',
+    'Pengawas Lahan': '🔭',
+    'Guest (View Only)': '👁️'
+  };
+  return map[role] || '👤';
+}
+
+function showSplash() {
+  const splash = document.getElementById('splash-screen');
+  if (!splash || !currentUser) return;
+
+  // Isi data user
+  document.getElementById('splash-name').textContent = currentUser.name;
+  document.getElementById('splash-role').textContent = currentUser.role;
+  document.getElementById('splash-role-icon').textContent = roleIcon(currentUser.role);
+
+  // Reset bar
+  const bar = document.getElementById('splash-bar');
+  bar.style.transition = 'none';
+  bar.style.transform = 'scaleX(1)';
+
+  // Tampilkan
+  splash.style.display = 'flex';
+  splash.classList.remove('fade-out');
+
+  // Countdown
+  let sisa = 3;
+  document.getElementById('splash-countdown').textContent = sisa;
+
+  // Animasi bar: menyusut dari penuh ke kosong selama 3 detik
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      bar.style.transition = 'transform 3s linear';
+      bar.style.transform = 'scaleX(0)';
+    });
+  });
+
+  splashCountdownInterval = setInterval(() => {
+    sisa--;
+    const el = document.getElementById('splash-countdown');
+    if (el) el.textContent = sisa;
+    if (sisa <= 0) clearInterval(splashCountdownInterval);
+  }, 1000);
+
+  splashTimer = setTimeout(() => skipSplash(), 3000);
+}
+
+function skipSplash() {
+  clearTimeout(splashTimer);
+  clearInterval(splashCountdownInterval);
+  const splash = document.getElementById('splash-screen');
+  if (!splash) return;
+  splash.classList.add('fade-out');
+  setTimeout(() => { splash.style.display = 'none'; }, 500);
+}
+
+// ==================== TOAST ====================
+function showToast(type, icon, title, msg) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast ' + type;
+  toast.innerHTML = `
+    <span class="toast-icon">${icon}</span>
+    <div class="toast-body"><strong>${title}</strong><p>${msg}</p></div>
+    <button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>
+  `;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(60px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 5000);
+}
+
+function saveProfile() {
+  const newName  = document.getElementById('edit-nama').value;
+  const newEmail = document.getElementById('edit-email').value;
+  if (!newName || !newEmail) { alert('Nama dan email tidak boleh kosong!'); return; }
+  const oldEmail = currentUser.email;
+  currentUser.name  = newName;
+  currentUser.email = newEmail;
+  // Update juga di registeredAccounts dan simpan ke localStorage
+  const account = registeredAccounts.find(a => a.email === oldEmail);
+  if (account) { account.name = newName; account.email = newEmail; }
+  saveAccounts(registeredAccounts);
+  initApp();
+  alert('✅ Profil berhasil diperbarui!');
+}
+
+// ==================== SIDEBAR MOBILE ====================
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+}
+
+// ==================== REAL-TIME SIMULATION ====================
+function randomBetween(a, b) { return (Math.random() * (b - a) + a).toFixed(1); }
+
+function updateTime() {
+  const now = new Date();
+  const time = now.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const subEl = document.getElementById('topbar-sub');
+  if (subEl && document.getElementById('inner-dashboard')?.classList.contains('active')) {
+    subEl.innerHTML = `<span class="live-dot"></span>Real-time · ${time} WIB`;
+  }
+}
+
+setInterval(updateTime, 1000);
+updateTime();
+
+// ==================== FIREBASE REALTIME ====================
+const firebaseConfig = {
+  apiKey: "AIzaSyBfg7IZnnzrn4JjdAFEE9jIIz5kON0I18E",
+  authDomain: "sawahsmart.firebaseapp.com",
+  databaseURL: "https://sawahsmart-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "sawahsmart",
+  storageBucket: "sawahsmart.firebasestorage.app",
+  messagingSenderId: "47457171013",
+  appId: "1:47457171013:web:c22fe7f4d793a1009e552c"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+function statusClass(sts) {
+  if (sts === 'NRM') return 'ok';
+  if (sts === 'WRN') return 'warn';
+  return 'danger';
+}
+function statusLabel(sts) {
+  if (sts === 'NRM') return '✓ Normal';
+  if (sts === 'WRN') return '⚠ Perhatian';
+  if (sts === 'ERR') return '✕ Error';
+  return '⏳ Memuat...';
+}
+
+function updateStatCard(elId, statusElId, value, unit, sts) {
+  const el = document.getElementById(elId);
+  const stEl = document.getElementById(statusElId);
+  if (el)   el.innerHTML = value + '<span class="stat-unit">' + unit + '</span>';
+  if (stEl) {
+    stEl.className = 'stat-status ' + statusClass(sts);
+    stEl.textContent = statusLabel(sts);
+  }
+}
+
+// Listen realtime dari Firebase
+db.ref('/sensor').on('value', (snapshot) => {
+  const d = snapshot.val();
+  if (!d) return;
+
+  // Update kartu sensor
+  updateStatCard('db-suhu',        'db-suhu-status',        d.suhu        ? d.suhu.toFixed(1)  : '--', '°C',  d.statusSuhu);
+  updateStatCard('db-cahaya',      'db-cahaya-status',      d.cahaya      ? Math.round(d.cahaya) : '--', ' lux', d.statusCahaya);
+  updateStatCard('db-tanah',       'db-tanah-status',       d.tanahPersen !== undefined ? d.tanahPersen : '--', '%', d.statusTanah);
+  updateStatCard('db-kelembapan',  'db-kelembapan-status',  d.kelembapan  ? d.kelembapan.toFixed(1) : '--', '%', 'NRM');
+
+  // Update status pompa
+  const pompaOn = d.pompa === true;
+  const pompaEl = document.getElementById('db-pompa-status');
+  if (pompaEl) {
+    pompaEl.textContent = pompaOn ? '🟢 Pompa ON' : '⚫ Pompa OFF';
+    pompaEl.style.color = pompaOn ? 'var(--green-600)' : 'var(--grey-500)';
+  }
+
+  // Update topbar subtitle dengan waktu update terakhir
+  const subEl = document.getElementById('topbar-sub');
+  if (subEl && document.getElementById('inner-dashboard')?.classList.contains('active')) {
+    const now = new Date();
+    const time = now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    subEl.innerHTML = '<span class="live-dot"></span>Real-time · Diperbarui ' + time + ' WIB';
+  }
+});
+
+// Fungsi kontrol pompa dari web
+function togglePompa(on) {
+  db.ref('/kontrol/pompa').set(on).then(() => {
+    showToast('info', on ? '💧' : '⚫', 'Pompa ' + (on ? 'Dinyalakan' : 'Dimatikan'),
+      'Perintah dikirim ke ESP32...');
+  });
+}
+
+// ==================== DATA SENSOR HISTORIS ====================
+// Generate & simpan data sensor 30 hari ke belakang di localStorage
+function generateSensorData() {
+  const KEY = 'sawahsmart_sensor_data';
+  let data = [];
+  try { data = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { data = []; }
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  // Cek data hari ini sudah ada belum
+  const todayStr = today.toISOString().slice(0,10);
+  const hasToday = data.some(d => d.date === todayStr);
+
+  if (!hasToday) {
+    // Generate 30 hari ke belakang (termasuk hari ini)
+    for (let d = 0; d < 30; d++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - d);
+      const dateStr = date.toISOString().slice(0,10);
+      if (data.some(r => r.date === dateStr)) continue;
+
+      // Generate setiap 15 menit, 2 plot
+      const slots = ['06:00','06:15','06:30','06:45','07:00','07:15','07:30','07:45',
+                     '08:00','08:15','08:30','08:45','09:00','09:15','09:30','09:45',
+                     '10:00','10:15','10:30','10:45','11:00','11:15','11:30','11:45',
+                     '12:00','12:15','12:30','12:45','13:00','13:15','13:30','13:45',
+                     '14:00','14:15','14:30','14:45','15:00','15:15','15:30','15:45',
+                     '16:00','16:15','16:30','16:45','17:00'];
+      ['Plot A'].forEach(plot => {
+        slots.forEach(time => {
+          const baseTemp = 29.5;
+          const suhu     = +(baseTemp + (Math.random()*5 - 1)).toFixed(1);
+          const kel      = Math.round(60 + Math.random()*20);
+          const cahaya   = Math.round(3000 + Math.random()*5000);
+          const air      = Math.round(70 + Math.random()*20);
+          let status = 'Normal';
+          if (suhu > 32) status = 'Panas';
+          else if (suhu < 26) status = 'Dingin';
+          else if (kel < 60) status = 'Kering';
+          data.push({ date: dateStr, time, plot, suhu, kel, cahaya, air, status });
+        });
+      });
+    }
+    localStorage.setItem(KEY, JSON.stringify(data));
+  }
+  return data;
+}
+
+// Set default filter ke hari ini saat halaman monitoring dibuka
+function initMonitoringFilter() {
+  const today = new Date().toISOString().slice(0,10);
+  const dari = document.getElementById('filter-dari');
+  const sampai = document.getElementById('filter-sampai');
+  if (dari && !dari.value) dari.value = today;
+  if (sampai && !sampai.value) sampai.value = today;
+  applyFilter();
+}
+
+function applyFilter() {
+  const dari   = document.getElementById('filter-dari').value;
+  const sampai = document.getElementById('filter-sampai').value;
+  const plot   = document.getElementById('filter-plot').value;
+  const wrap   = document.getElementById('riwayat-table-wrap');
+  const info   = document.getElementById('filter-info');
+
+  if (!dari || !sampai) { info.textContent = '⚠️ Pilih tanggal dari dan sampai terlebih dahulu.'; return; }
+  if (dari > sampai)    { info.textContent = '⚠️ Tanggal "Dari" tidak boleh lebih besar dari "Sampai".'; return; }
+
+  const allData = generateSensorData();
+  let filtered = allData.filter(d => d.date >= dari && d.date <= sampai);
+  if (plot) filtered = filtered.filter(d => d.plot === plot);
+  filtered.sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time));
+
+  info.textContent = `Menampilkan ${filtered.length} data dari ${formatDateLabel(dari)} s/d ${formatDateLabel(sampai)}${plot ? ' · '+plot : ''}`;
+
+  if (filtered.length === 0) {
+    wrap.innerHTML = '<div style="text-align:center;padding:24px;color:var(--grey-400);">📭 Tidak ada data untuk rentang ini</div>';
+    return;
+  }
+
+  const shown = filtered.slice(0, 200);
+
+  // Render sebagai kartu — otomatis menyesuaikan layar apapun
+  wrap.style.width = '100%';
+  wrap.style.overflowX = 'hidden';
+  wrap.style.boxSizing = 'border-box';
+  wrap.innerHTML = shown.map(d => {
+    const stsCls  = d.status === 'Normal' ? 'ok' : (d.status === 'Panas' ? 'warn' : 'danger');
+    const stsIcon = d.status === 'Normal' ? '✓' : '⚠';
+    const suhuColor = d.suhu > 32 ? 'var(--danger)' : d.suhu < 26 ? 'var(--info)' : 'var(--grey-900)';
+    return `<div style="border:1px solid var(--grey-200);border-radius:10px;padding:10px;margin-bottom:8px;background:white;width:100%;max-width:100%;box-sizing:border-box;overflow:hidden;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:4px;">
+        <div style="font-family:var(--mono);font-size:0.72rem;color:var(--grey-500);">${d.date} · ${d.time}</div>
+        <span class="stat-status ${stsCls}" style="display:inline-flex;font-size:0.65rem;">${stsIcon} ${d.status}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;width:100%;box-sizing:border-box;">
+        <div style="background:var(--grey-50);border-radius:7px;padding:7px 4px;text-align:center;min-width:0;overflow:hidden;">
+          <div style="font-size:0.6rem;color:var(--grey-400);margin-bottom:2px;">🌡️ Suhu</div>
+          <div style="font-family:var(--mono);font-weight:700;font-size:0.82rem;color:${suhuColor};white-space:nowrap;">${d.suhu}°C</div>
+        </div>
+        <div style="background:var(--grey-50);border-radius:7px;padding:7px 4px;text-align:center;min-width:0;overflow:hidden;">
+          <div style="font-size:0.6rem;color:var(--grey-400);margin-bottom:2px;">💧 Tanah</div>
+          <div style="font-family:var(--mono);font-weight:700;font-size:0.82rem;color:#3b82f6;white-space:nowrap;">${d.kel}%</div>
+        </div>
+        <div style="background:var(--grey-50);border-radius:7px;padding:7px 4px;text-align:center;min-width:0;overflow:hidden;">
+          <div style="font-size:0.6rem;color:var(--grey-400);margin-bottom:2px;">☀️ Cahaya</div>
+          <div style="font-family:var(--mono);font-weight:700;font-size:0.82rem;color:#f59e0b;white-space:nowrap;">${d.cahaya}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  if (filtered.length > 200) {
+    wrap.innerHTML += `<div style="text-align:center;font-size:0.8rem;color:var(--grey-400);padding:12px;">... dan ${filtered.length-200} data lainnya. Gunakan Export CSV untuk data lengkap.</div>`;
+  }
+}
+
+function formatDateLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+function exportCSV() {
+  const dari   = document.getElementById('filter-dari').value;
+  const sampai = document.getElementById('filter-sampai').value;
+  const plot   = document.getElementById('filter-plot').value;
+  if (!dari || !sampai) { alert('Pilih rentang tanggal terlebih dahulu!'); return; }
+
+  const allData = generateSensorData();
+  let filtered = allData.filter(d => d.date >= dari && d.date <= sampai);
+  if (plot) filtered = filtered.filter(d => d.plot === plot);
+  filtered.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
+
+  const header = 'Tanggal,Waktu,Plot,Suhu (C),Kelembapan (%),Cahaya (lux),Air Tandon (%),Status\n';
+  const rows = filtered.map(d => `${d.date},${d.time},${d.plot},${d.suhu},${d.kel},${d.cahaya},${d.air},${d.status}`).join('\n');
+  const blob = new Blob(['﻿' + header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `sawahsmart_sensor_${dari}_${sampai}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+// ==================== MODAL HUBUNGI ADMIN ====================
+function openModal() {
+  // Prefill nama & email dari currentUser jika sudah login
+  if (currentUser && !currentUser.isGuest) {
+    const namaEl  = document.getElementById('msg-nama');
+    const emailEl = document.getElementById('msg-email');
+    if (namaEl  && !namaEl.value)  namaEl.value  = currentUser.name;
+    if (emailEl && !emailEl.value) emailEl.value = currentUser.email;
+  }
+
+  // Reset tampilan ke form
+  document.getElementById('modal-form-view').style.display = 'block';
+  document.getElementById('modal-success-view').style.display = 'none';
+
+  // Tampilkan riwayat pesan dari localStorage
+  loadMsgHistory();
+
+  document.getElementById('modal-hubungi').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('modal-hubungi').classList.remove('active');
+}
+
+function closeModalIfOutside(e) {
+  if (e.target === document.getElementById('modal-hubungi')) closeModal();
+}
+
+function kirimPesan() {
+  const nama      = document.getElementById('msg-nama').value.trim();
+  const email     = document.getElementById('msg-email').value.trim();
+  const kategori  = document.getElementById('msg-kategori').value;
+  const pesan     = document.getElementById('msg-pesan').value.trim();
+
+  if (!nama || !email || !kategori || !pesan) {
+    alert('⚠️ Harap isi semua kolom sebelum mengirim!');
+    return;
+  }
+
+  // Simpan ke localStorage
+  const KEY = 'sawahsmart_messages';
+  let messages = [];
+  try { messages = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) {}
+
+  messages.unshift({
+    nama, email, kategori, pesan,
+    waktu: new Date().toISOString()
+  });
+
+  localStorage.setItem(KEY, JSON.stringify(messages));
+
+  // Reset form
+  document.getElementById('msg-pesan').value = '';
+  document.getElementById('msg-kategori').value = '';
+
+  // Tampilkan sukses
+  document.getElementById('modal-form-view').style.display = 'none';
+  document.getElementById('modal-success-view').style.display = 'block';
+}
+
+function loadMsgHistory() {
+  const KEY = 'sawahsmart_messages';
+  let messages = [];
+  try { messages = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) {}
+
+  // Filter pesan milik user ini (by email)
+  const email = currentUser && !currentUser.isGuest ? currentUser.email : null;
+  const myMsgs = email ? messages.filter(m => m.email === email) : [];
+
+  const wrap = document.getElementById('msg-history-wrap');
+  const list = document.getElementById('msg-history-list');
+
+  if (myMsgs.length === 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+
+  wrap.style.display = 'block';
+  list.innerHTML = myMsgs.slice(0, 5).map(m => {
+    const d = new Date(m.waktu);
+    const tgl = d.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+    const jam = d.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+    return `<div class="msg-history-item">
+      <div class="msg-meta">${tgl} · ${jam} &nbsp;|&nbsp; ${m.kategori}</div>
+      <div class="msg-text">${m.pesan}</div>
+    </div>`;
+  }).join('');
+}
+// ==================== PANEL ADMIN ====================
+function getMessages() {
+  try { return JSON.parse(localStorage.getItem('sawahsmart_messages') || '[]'); }
+  catch(e) { return []; }
+}
+
+function updateAdminBadge() {
+  const msgs = getMessages();
+  const badge = document.querySelector('.admin-msg-badge');
+  if (!badge) return;
+  if (msgs.length > 0) {
+    badge.textContent = msgs.length;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function katBadgeClass(kat) {
+  if (kat === 'Laporan Bug / Error') return 'bug';
+  if (kat === 'Permintaan Fitur')    return 'fitur';
+  if (kat === 'Masalah Akun')        return 'akun';
+  if (kat === 'Pertanyaan Umum')     return 'umum';
+  return 'lain';
+}
+
+function loadAdminMessages() {
+  let msgs = getMessages();
+
+  // Filter kategori
+  const kat = document.getElementById('admin-filter-kat')?.value || '';
+  if (kat) msgs = msgs.filter(m => m.kategori === kat);
+
+  // Filter search
+  const q = (document.getElementById('admin-search')?.value || '').toLowerCase();
+  if (q) msgs = msgs.filter(m =>
+    m.nama.toLowerCase().includes(q) ||
+    m.email.toLowerCase().includes(q) ||
+    m.pesan.toLowerCase().includes(q)
+  );
+
+  // Update statistik (dari semua pesan, tanpa filter)
+  const all = getMessages();
+  document.getElementById('stat-total').textContent = all.length;
+  document.getElementById('stat-bug').textContent   = all.filter(m => m.kategori === 'Laporan Bug / Error').length;
+  document.getElementById('stat-fitur').textContent = all.filter(m => m.kategori === 'Permintaan Fitur').length;
+  document.getElementById('stat-akun').textContent  = all.filter(m => m.kategori === 'Masalah Akun').length;
+
+  const list = document.getElementById('admin-msg-list');
+  if (msgs.length === 0) {
+    list.innerHTML = `<div style="text-align:center;padding:48px;color:var(--grey-400);">
+      <div style="font-size:2.5rem;margin-bottom:10px;">📭</div>
+      <div>${q || kat ? 'Tidak ada pesan yang cocok dengan filter' : 'Belum ada pesan masuk'}</div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = msgs.map((m, i) => {
+    const d = new Date(m.waktu);
+    const tgl = d.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+    const jam = d.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+    const cls = katBadgeClass(m.kategori);
+    // Index di array asli (untuk hapus)
+    const allMsgs = getMessages();
+    const realIdx = allMsgs.findIndex(x => x.waktu === m.waktu && x.email === m.email);
+    return `<div class="msg-card">
+      <div class="msg-card-header">
+        <div class="msg-card-sender">
+          <strong>${m.nama}</strong>
+          <span>📧 ${m.email}</span>
+        </div>
+        <div class="msg-card-meta">
+          <div><span class="kat-badge ${cls}">${m.kategori}</span></div>
+          <div class="msg-card-time">${tgl} · ${jam}</div>
+        </div>
+      </div>
+      <div class="msg-card-body">${m.pesan}</div>
+      <div class="msg-card-del">
+        <button onclick="hapusPesan(${realIdx})">🗑 Hapus Pesan</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function hapusPesan(idx) {
+  if (!confirm('Hapus pesan ini?')) return;
+  let msgs = getMessages();
+  msgs.splice(idx, 1);
+  localStorage.setItem('sawahsmart_messages', JSON.stringify(msgs));
+  updateAdminBadge();
+  loadAdminMessages();
+}
+
+function exportPesanCSV() {
+  const msgs = getMessages();
+  if (msgs.length === 0) { alert('Belum ada pesan untuk diekspor!'); return; }
+  const header = 'Waktu,Nama,Email,Kategori,Pesan\n';
+  const rows = msgs.map(m => {
+    const tgl = new Date(m.waktu).toLocaleString('id-ID');
+    const pesan = m.pesan.replace(/"/g, '""');
+    return `"${tgl}","${m.nama}","${m.email}","${m.kategori}","${pesan}"`;
+  }).join('\n');
+  const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = 'sawahsmart_pesan_masuk.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+// ==================== PANEL TEKNISI ====================
+let editSensorIdx = -1;
+
+function getSensors() {
+  try { return JSON.parse(localStorage.getItem('sawahsmart_sensors') || '[]'); }
+  catch(e) { return []; }
+}
+function saveSensors(data) {
+  localStorage.setItem('sawahsmart_sensors', JSON.stringify(data));
+}
+function getLogs() {
+  try { return JSON.parse(localStorage.getItem('sawahsmart_logs') || '[]'); }
+  catch(e) { return []; }
+}
+function saveLogs(data) {
+  localStorage.setItem('sawahsmart_logs', JSON.stringify(data));
+}
+
+function initTeknisi() {
+  // Paksa reset jika localStorage masih menyimpan sensor Plot B lama
+  const existingSensors = getSensors();
+  const hasPlotB = existingSensors.some(s => s.plot === 'Plot B' || (s.nama && s.nama.includes('B1')) || (s.nama && s.nama.includes('Tanah B')));
+  if (hasPlotB) {
+    localStorage.removeItem('sawahsmart_sensors');
+    localStorage.removeItem('sawahsmart_logs');
+  }
+
+  // Generate data sensor default jika belum ada
+  if (getSensors().length === 0) {
+    const defaults = [
+      { nama:'Node Suhu A1',  tipe:'Suhu & Kelembapan (DHT22)',   plot:'Plot A', ip:'Pojok Utara Plot A', interval:15, status:'Aktif',    lastActive: new Date().toISOString() },
+      { nama:'Node Cahaya A', tipe:'Cahaya (BH1750)',              plot:'Plot A', ip:'Tengah Plot A',      interval:30, status:'Aktif',    lastActive: new Date().toISOString() },
+      { nama:'Node Air',      tipe:'Ketinggian Air (Ultrasonic)',  plot:'Umum',   ip:'Tandon Utama',       interval:60, status:'Aktif',    lastActive: new Date().toISOString() },
+    ];
+    saveSensors(defaults);
+  }
+  // Generate log default jika belum ada
+  if (getLogs().length === 0) generateDefaultLogs();
+
+  renderSensors();
+  renderLog();
+}
+
+function generateDefaultLogs() {
+  const now = Date.now();
+  const logs = [
+    { level:'ERROR',   waktu: new Date(now - 1800000).toISOString(), msg:'Node Suhu A1 — Tidak ada respons selama 30 menit. Koneksi timeout.' },
+    { level:'WARNING', waktu: new Date(now - 3600000).toISOString(), msg:'Node Tanah A — Nilai kelembapan tanah di luar rentang normal (>95%). Kemungkinan sensor perlu kalibrasi.' },
+    { level:'INFO',    waktu: new Date(now - 7200000).toISOString(), msg:'Firmware ESP32 Node Suhu A1 berhasil diperbarui ke v3.1.2.' },
+    { level:'ERROR',   waktu: new Date(now - 86400000).toISOString(), msg:'Node Air — Gagal membaca sensor ultrasonik. Nilai: -1. Periksa kabel.' },
+    { level:'WARNING', waktu: new Date(now - 90000000).toISOString(), msg:'Node Cahaya A — Intensitas cahaya 0 lux selama 2 jam. Kemungkinan sensor terhalang.' },
+    { level:'INFO',    waktu: new Date(now - 172800000).toISOString(), msg:'Sensor Node Tanah A ditambahkan ke sistem oleh Teknisi.' },
+    { level:'INFO',    waktu: new Date(now - 259200000).toISOString(), msg:'Sistem monitoring dimulai ulang. Semua sensor terhubung kembali.' },
+    { level:'ERROR',   waktu: new Date(now - 345600000).toISOString(), msg:'Node Suhu A1 — Suhu melebihi batas kritis 38°C. Kemungkinan sensor terkena panas langsung.' },
+  ];
+  saveLogs(logs);
+}
+
+function addLog(level, msg) {
+  const logs = getLogs();
+  logs.unshift({ level, waktu: new Date().toISOString(), msg });
+  saveLogs(logs);
+}
+
+function renderSensors() {
+  const sensors = getSensors();
+  const tbody   = document.getElementById('sensor-tbody');
+  const mobileEl = document.getElementById('sensor-cards-mobile');
+  const isMobile = window.innerWidth <= 700;
+
+  // Toggle tampilan desktop/mobile
+  const desktopView = document.querySelector('.sensor-desktop-view');
+  if (desktopView) desktopView.style.display = isMobile ? 'none' : 'block';
+  if (mobileEl)    mobileEl.style.display    = isMobile ? 'block' : 'none';
+
+  if (sensors.length === 0) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--grey-400);padding:24px;">Belum ada sensor terdaftar</td></tr>';
+    if (mobileEl) mobileEl.innerHTML = '<div style="text-align:center;color:var(--grey-400);padding:24px;">Belum ada sensor terdaftar</div>';
+    return;
+  }
+
+  const rows = sensors.map((s, i) => {
+    const cls = 'sensor-status-' + s.status.toLowerCase();
+    const d   = new Date(s.lastActive);
+    const tgl = d.toLocaleDateString('id-ID', {day:'2-digit', month:'short'});
+    const jam = d.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+    return `<tr>
+      <td style="font-weight:600;">${s.nama}</td>
+      <td style="font-size:0.8rem;">${s.tipe}</td>
+      <td>${s.plot}</td>
+      <td style="font-size:0.8rem;">${s.ip}</td>
+      <td class="mono">${s.interval}s</td>
+      <td><span class="stat-status ${cls}" style="display:inline-flex;font-size:0.7rem;">${s.status}</span></td>
+      <td class="mono" style="font-size:0.75rem;">${tgl} · ${jam}</td>
+      <td>
+        <button onclick="editSensor(${i})" style="font-size:0.75rem;color:var(--green-700);background:var(--green-50);border:1px solid var(--green-200);border-radius:6px;padding:3px 10px;cursor:pointer;font-weight:600;">✏️ Edit</button>
+        <button onclick="hapusSensor(${i})" style="font-size:0.75rem;color:var(--danger);background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:3px 10px;cursor:pointer;font-weight:600;margin-left:4px;">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  if (tbody) tbody.innerHTML = rows;
+
+  // Mobile card view
+  if (mobileEl) {
+    mobileEl.innerHTML = sensors.map((s, i) => {
+      const cls = 'sensor-status-' + s.status.toLowerCase();
+      const d   = new Date(s.lastActive);
+      const tgl = d.toLocaleDateString('id-ID', {day:'2-digit', month:'short', year:'numeric'});
+      const jam = d.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+      return `<div style="border:1px solid var(--grey-200);border-radius:10px;padding:14px;margin-bottom:10px;background:white;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+          <div>
+            <div style="font-weight:700;font-size:0.9rem;color:var(--grey-900);">${s.nama}</div>
+            <div style="font-size:0.75rem;color:var(--grey-500);margin-top:2px;">${s.tipe}</div>
+          </div>
+          <span class="stat-status ${cls}" style="display:inline-flex;font-size:0.7rem;">${s.status}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.78rem;color:var(--grey-700);margin-bottom:10px;">
+          <div>📍 <strong>Plot:</strong> ${s.plot}</div>
+          <div>⏱ <strong>Interval:</strong> ${s.interval}s</div>
+          <div style="grid-column:1/-1;">📌 <strong>Lokasi:</strong> ${s.ip}</div>
+          <div style="grid-column:1/-1;">🕐 <strong>Aktif:</strong> ${tgl} · ${jam}</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="editSensor(${i})" style="flex:1;font-size:0.8rem;color:var(--green-700);background:var(--green-50);border:1px solid var(--green-200);border-radius:7px;padding:7px;cursor:pointer;font-weight:600;">✏️ Edit</button>
+          <button onclick="hapusSensor(${i})" style="flex:1;font-size:0.8rem;color:var(--danger);background:#fef2f2;border:1px solid #fecaca;border-radius:7px;padding:7px;cursor:pointer;font-weight:600;">🗑 Hapus</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function showTambahSensor() {
+  editSensorIdx = -1;
+  document.getElementById('sensor-form-title').textContent = '➕ Tambah Sensor Baru';
+  document.getElementById('sf-nama').value = '';
+  document.getElementById('sf-tipe').value = '';
+  document.getElementById('sf-plot').value = 'Plot A';
+  document.getElementById('sf-ip').value = '';
+  document.getElementById('sf-interval').value = '15';
+  document.getElementById('sf-status').value = 'Aktif';
+  document.getElementById('sensor-form-wrap').classList.remove('hidden');
+  document.getElementById('sf-nama').focus();
+}
+
+function editSensor(i) {
+  const s = getSensors()[i];
+  editSensorIdx = i;
+  document.getElementById('sensor-form-title').textContent = '✏️ Edit Sensor';
+  document.getElementById('sf-nama').value     = s.nama;
+  document.getElementById('sf-tipe').value     = s.tipe;
+  document.getElementById('sf-plot').value     = s.plot;
+  document.getElementById('sf-ip').value       = s.ip;
+  document.getElementById('sf-interval').value = s.interval;
+  document.getElementById('sf-status').value   = s.status;
+  document.getElementById('sensor-form-wrap').classList.remove('hidden');
+}
+
+function tutupFormSensor() {
+  document.getElementById('sensor-form-wrap').classList.add('hidden');
+}
+
+function simpanSensor() {
+  const nama     = document.getElementById('sf-nama').value.trim();
+  const tipe     = document.getElementById('sf-tipe').value;
+  const plot     = document.getElementById('sf-plot').value;
+  const ip       = document.getElementById('sf-ip').value.trim();
+  const interval = parseInt(document.getElementById('sf-interval').value) || 15;
+  const status   = document.getElementById('sf-status').value;
+
+  if (!nama || !tipe || !ip) { alert('⚠️ Harap isi Nama, Tipe, dan IP Address!'); return; }
+
+  const sensors = getSensors();
+  const entry = { nama, tipe, plot, ip, interval, status, lastActive: new Date().toISOString() };
+
+  if (editSensorIdx === -1) {
+    sensors.push(entry);
+    addLog('INFO', `Sensor baru ditambahkan: ${nama} (${tipe}) di ${plot}.`);
+  } else {
+    sensors[editSensorIdx] = entry;
+    addLog('INFO', `Sensor ${nama} diperbarui oleh Teknisi.`);
+  }
+  saveSensors(sensors);
+  tutupFormSensor();
+  renderSensors();
+}
+
+function hapusSensor(i) {
+  const sensors = getSensors();
+  if (!confirm(`Hapus sensor "${sensors[i].nama}"?`)) return;
+  addLog('WARNING', `Sensor ${sensors[i].nama} dihapus dari sistem.`);
+  sensors.splice(i, 1);
+  saveSensors(sensors);
+  renderSensors();
+}
+
+function renderLog() {
+  const filter = document.getElementById('log-filter')?.value || '';
+  let logs = getLogs();
+  if (filter) logs = logs.filter(l => l.level === filter);
+
+  const list = document.getElementById('log-list');
+  if (!list) return;
+  if (logs.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:32px;color:var(--grey-400);">📋 Tidak ada log' + (filter ? ' untuk filter ini' : '') + '</div>';
+    return;
+  }
+
+  list.innerHTML = logs.map(l => {
+    const d   = new Date(l.waktu);
+    const tgl = d.toLocaleDateString('id-ID', {day:'2-digit', month:'short', year:'numeric'});
+    const jam = d.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+    const bg  = l.level === 'ERROR' ? '#fef2f2' : l.level === 'WARNING' ? '#fffbeb' : '#eff6ff';
+    const bc  = l.level === 'ERROR' ? '#fecaca' : l.level === 'WARNING' ? '#fde68a' : '#bfdbfe';
+    return `<div style="border:1px solid ${bc};background:${bg};border-radius:10px;padding:12px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span class="log-level ${l.level}" style="font-size:0.7rem;">${l.level}</span>
+        <span style="font-size:0.72rem;color:var(--grey-400);font-family:var(--mono);">${tgl} ${jam}</span>
+      </div>
+      <div style="font-size:0.82rem;color:var(--grey-700);line-height:1.5;">${l.msg}</div>
+    </div>`;
+  }).join('');
+}
+
+function clearLog() {
+  if (!confirm('Hapus semua log? Tindakan ini tidak bisa dibatalkan.')) return;
+  saveLogs([]);
+  renderLog();
+}
+
+function switchTeknisiTab(btn, tabId) {
+  document.querySelectorAll('#inner-teknisi .sub-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ['ttab-sensor','ttab-log'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  const target = document.getElementById(tabId);
+  if (target) target.classList.remove('hidden');
+}
+</script>
+<!-- ==================== REST API + NOTIFIKASI PER ROLE ==================== -->
+<style>
+/* Modal Notifikasi */
+#nm-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:flex-end;justify-content:center;padding:16px;animation:nmFadeIn 0.25s ease;}
+#nm-overlay.nm-hidden{display:none!important;}
+@keyframes nmFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes nmSlideUp{from{transform:translateY(50px);opacity:0}to{transform:translateY(0);opacity:1}}
+.nm-box{background:white;border-radius:20px;padding:22px 18px 18px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.25);animation:nmSlideUp 0.35s cubic-bezier(0.22,1,0.36,1);max-height:85vh;overflow-y:auto;box-sizing:border-box;}
+.nm-icon-wrap{width:54px;height:54px;border-radius:15px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin:0 auto 12px;}
+.nm-title{text-align:center;font-size:0.95rem;font-weight:700;color:#111827;margin-bottom:4px;}
+.nm-sub{text-align:center;font-size:0.75rem;color:#6b7280;margin-bottom:14px;line-height:1.5;}
+.nm-rules{background:#f9fafb;border-radius:12px;padding:10px 12px;margin-bottom:14px;}
+.nm-rule{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid #f3f4f6;}
+.nm-rule:last-child{border-bottom:none;padding-bottom:0;}
+.nm-rule-icon{font-size:0.95rem;flex-shrink:0;margin-top:1px;}
+.nm-rule-title{font-weight:700;color:#111827;display:block;margin-bottom:1px;font-size:0.78rem;}
+.nm-rule-desc{color:#6b7280;font-size:0.71rem;}
+.nm-btns{display:flex;gap:8px;}
+.nm-btn-allow{flex:2;padding:12px;border:none;border-radius:10px;font-size:0.875rem;font-weight:700;color:white;cursor:pointer;font-family:inherit;}
+.nm-btn-later{flex:1;padding:12px;background:#f3f4f6;color:#6b7280;border:none;border-radius:10px;font-size:0.875rem;font-weight:600;cursor:pointer;font-family:inherit;}
+
+/* REST API status badge */
+#api-status-badge{position:fixed;bottom:16px;right:16px;z-index:9000;padding:6px 12px;border-radius:999px;font-size:0.72rem;font-weight:700;display:none;align-items:center;gap:5px;box-shadow:0 4px 12px rgba(0,0,0,0.15);}
+#api-status-badge.online{background:#dcfce7;color:#166534;display:flex;}
+#api-status-badge.offline{background:#fef2f2;color:#991b1b;display:flex;}
+</style>
+
+<!-- Modal Notifikasi -->
+<div id="nm-overlay" class="nm-hidden">
+  <div class="nm-box">
+    <div class="nm-icon-wrap" id="nm-icon"></div>
+    <div class="nm-title" id="nm-title">Aktifkan Notifikasi</div>
+    <div class="nm-sub" id="nm-sub"></div>
+    <div class="nm-rules" id="nm-rules"></div>
+    <div class="nm-btns">
+      <button class="nm-btn-allow" id="nm-btn-allow" onclick="nmAllow()">🔔 Izinkan Notifikasi</button>
+      <button class="nm-btn-later" onclick="nmClose()">Nanti</button>
+    </div>
+  </div>
+</div>
+
+<!-- REST API status badge -->
+<div id="api-status-badge">
+  <span id="api-badge-dot">●</span>
+  <span id="api-badge-text">REST API</span>
+</div>
+
+<script>
+// =====================================================
+//  REST API CONFIG
+//  Ganti ESP32_NGROK_URL dengan URL ngrok kamu nanti
+// =====================================================
+const REST_API = {
+  baseUrl: localStorage.getItem('esp32_api_url') || '',
+  apiKey:  'sawahsmart2026',
+
+  // Buat URL lengkap
+  url(path) { return this.baseUrl.replace(/\/$/, '') + path + '?key=' + this.apiKey; },
+
+  // GET /api/sensor
+  async getSensor() {
+    if (!this.baseUrl) return null;
+    try {
+      const r = await fetch(this.url('/api/sensor'), {
+        method: 'GET',
+        headers: { 'ngrok-skip-browser-warning': 'true', 'X-API-Key': this.apiKey },
+        signal: AbortSignal.timeout(5000)
+      });
+      return r.ok ? await r.json() : null;
+    } catch(e) { return null; }
+  },
+
+  // POST /api/pompa
+  async setPompa(status) {
+    if (!this.baseUrl) return false;
+    try {
+      const r = await fetch(this.url('/api/pompa'), {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', 'X-API-Key': this.apiKey, 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({ status }),
+        signal: AbortSignal.timeout(5000)
+      });
+      return r.ok;
+    } catch(e) { return false; }
+  },
+
+  // Cek apakah ESP32 online
+  async ping() {
+    if (!this.baseUrl) return false;
+    try {
+      const r = await fetch(this.url('/api/status'), {
+        headers: { 'ngrok-skip-browser-warning': 'true', 'X-API-Key': this.apiKey },
+        signal: AbortSignal.timeout(3000)
+      });
+      return r.ok;
+    } catch(e) { return false; }
+  }
+};
+
+// =====================================================
+//  KONTROL POMPA — Firebase utama, REST API backup
+// =====================================================
+async function togglePompa(on) {
+  // 1. Kirim ke Firebase (utama)
+  const db = firebase.database();
+  db.ref('/kontrol/pompa').set(on);
+
+  // 2. Kirim ke REST API ESP32 (backup, lebih cepat)
+  if (REST_API.baseUrl) {
+    const ok = await REST_API.setPompa(on);
+    if (ok) {
+      showToast('ok', on ? '💧':'⏹', 'Pompa ' + (on ? 'Dinyalakan':'Dimatikan'), 'Perintah terkirim via REST API ✅');
+    } else {
+      showToast('info', on ? '💧':'⏹', 'Pompa ' + (on ? 'Dinyalakan':'Dimatikan'), 'Firebase berhasil, REST API tidak tersedia');
+    }
+  } else {
+    showToast('ok', on ? '💧':'⏹', 'Pompa ' + (on ? 'Dinyalakan':'Dimatikan'), 'Perintah dikirim ke Firebase');
+  }
+}
+
+// =====================================================
+//  PANEL SETTING URL NGROK
+// =====================================================
+function showApiSettings() {
+  const current = localStorage.getItem('esp32_api_url') || '';
+  const url = prompt(
+    '🔧 Masukkan URL Ngrok ESP32:\n\nContoh: https://abc123.ngrok-free.app\n\n(Kosongkan untuk hanya pakai Firebase)',
+    current
+  );
+  if (url === null) return; // user cancel
+  if (url.trim() === '') {
+    localStorage.removeItem('esp32_api_url');
+    REST_API.baseUrl = '';
+    showToast('info','ℹ️','REST API Dinonaktifkan','Hanya menggunakan Firebase');
+  } else {
+    localStorage.setItem('esp32_api_url', url.trim());
+    REST_API.baseUrl = url.trim();
+    testApiConnection();
+  }
+}
+
+async function testApiConnection() {
+  showToast('info','⏳','Mengecek koneksi ESP32...','');
+  const ok = await REST_API.ping();
+  const badge = document.getElementById('api-status-badge');
+  if (ok) {
+    badge.className = 'online';
+    document.getElementById('api-badge-text').textContent = 'REST API Online';
+    showToast('ok','✅','ESP32 Terhubung!','REST API siap digunakan sebagai backup');
+  } else {
+    badge.className = 'offline';
+    document.getElementById('api-badge-text').textContent = 'REST API Offline';
+    showToast('warn','⚠️','ESP32 Tidak Terhubung','Pastikan ngrok aktif & URL benar');
+  }
+}
+
+// Cek koneksi REST API saat startup jika URL sudah tersimpan
+window.addEventListener('load', () => {
+  if (REST_API.baseUrl) {
+    setTimeout(testApiConnection, 2000);
+  }
+});
+
+// Cek berkala setiap 2 menit
+setInterval(async () => {
+  if (!REST_API.baseUrl) return;
+  const ok = await REST_API.ping();
+  const badge = document.getElementById('api-status-badge');
+  badge.className = ok ? 'online' : 'offline';
+  document.getElementById('api-badge-text').textContent = ok ? 'REST API Online' : 'REST API Offline';
+}, 2 * 60 * 1000);
+
+// =====================================================
+//  NOTIFIKASI PER ROLE
+// =====================================================
+const NM_CFG = {
+  'Petani':{icon:'🌾',color:'#16a34a',sub:'Dapatkan peringatan kondisi tanaman & pompa secara otomatis',rules:[
+    {icon:'💧',title:'Tanah Kering',desc:'Kelembapan < 40% — segera nyalakan pompa air'},
+    {icon:'🌡️',title:'Suhu Terlalu Panas',desc:'Suhu > 33°C — periksa kondisi tanaman'},
+    {icon:'⏹',title:'Pompa Terlalu Lama ON',desc:'Pompa ON > 2 menit — cek kondisi lahan'},
+    {icon:'🌿',title:'Fase Tanaman',desc:'Notifikasi update fase pertumbuhan padi'},
+    {icon:'🚰',title:'Air Tandon Hampir Habis',desc:'Ketinggian air tandon di bawah batas normal'},
+  ]},
+  'Pengawas Lahan':{icon:'🔭',color:'#2563eb',sub:'Pantau efisiensi penggunaan air & kinerja sensor',rules:[
+    {icon:'📡',title:'Sensor Tidak Mengirim Data',desc:'Sensor kelembapan tanah offline > 10 menit'},
+    {icon:'💦',title:'Penggunaan Air Tinggi',desc:'Konsumsi air hari ini melebihi batas normal'},
+    {icon:'🔄',title:'Pompa Terlalu Sering Aktif',desc:'Pompa aktif lebih dari 10 kali dalam 1 jam'},
+  ]},
+  'Teknisi':{icon:'🔧',color:'#d97706',sub:'Fokus: maintenance perangkat IoT & troubleshooting',rules:[
+    {icon:'📵',title:'ESP32 Offline',desc:'Tidak terhubung ke jaringan'},
+    {icon:'☁️',title:'Koneksi Firebase Bermasalah',desc:'Gagal sinkronisasi data ke server'},
+    {icon:'⚠️',title:'Sensor Error',desc:'Sensor suhu gagal membaca data'},
+    {icon:'🚫',title:'Pompa Tidak Merespon',desc:'Perintah ON/OFF pompa gagal dijalankan'},
+    {icon:'🛠️',title:'Perlu Maintenance',desc:'Jadwal pemeriksaan perangkat mingguan tiba'},
+    {icon:'📶',title:'WiFi Lemah',desc:'Koneksi internet greenhouse tidak stabil'},
+  ]},
+  'Administrator':{icon:'🛡️',color:'#7c3aed',sub:'Fokus: pengelolaan sistem & user',rules:[
+    {icon:'👤',title:'User Login',desc:'Pengguna berhasil login ke sistem'},
+    {icon:'⏱️',title:'Server Delay',desc:'Respon server melambat lebih dari 5 detik'},
+    {icon:'⚙️',title:'Perubahan Pengaturan',desc:'Konfigurasi pompa diubah oleh Teknisi'},
+    {icon:'📟',title:'Device Baru Terdaftar',desc:'ESP32 baru berhasil ditambahkan ke sistem'},
+  ]}
+};
+
+const _nmCD = {};
+
+function nmShow() {
+  if (!currentUser) return;
+  if (Notification.permission === 'granted') { nmStartMonitor(); return; }
+  if (Notification.permission === 'denied') return;
+  if (localStorage.getItem('nm_ok') === '1') { nmStartMonitor(); return; }
+  const cfg = NM_CFG[currentUser.role];
+  if (!cfg) return;
+  document.getElementById('nm-icon').textContent = cfg.icon;
+  document.getElementById('nm-icon').style.background = cfg.color + '18';
+  document.getElementById('nm-title').textContent = 'Aktifkan Notifikasi — ' + currentUser.role;
+  document.getElementById('nm-sub').textContent = cfg.sub;
+  document.getElementById('nm-btn-allow').style.background = cfg.color;
+  document.getElementById('nm-rules').innerHTML = cfg.rules.map(r =>
+    `<div class="nm-rule"><span class="nm-rule-icon">${r.icon}</span><div><span class="nm-rule-title">${r.title}</span><span class="nm-rule-desc">${r.desc}</span></div></div>`
+  ).join('');
+  document.getElementById('nm-overlay').classList.remove('nm-hidden');
+}
+
+function nmClose() { document.getElementById('nm-overlay').classList.add('nm-hidden'); }
+
+async function nmAllow() {
+  nmClose();
+  if (!('Notification' in window)) { showToast('warn','⚠️','Tidak Didukung','Browser ini tidak mendukung notifikasi.'); return; }
+  const p = await Notification.requestPermission();
+  if (p === 'granted') {
+    localStorage.setItem('nm_ok','1');
+    showToast('ok','✅','Notifikasi Aktif!','Kamu akan menerima peringatan kondisi lahan otomatis.');
+    nmStartMonitor();
+  } else {
+    showToast('warn','🔕','Notifikasi Diblokir','Aktifkan notifikasi di pengaturan browser.');
+  }
+}
+
+function nmSend(key, title, body, minCD) {
+  const now = Date.now();
+  if (now - (_nmCD[key]||0) < minCD*60*1000) return;
+  _nmCD[key] = now;
+  showToast('warn','🔔',title,body);
+  if (Notification.permission==='granted') {
+    try { new Notification('SawahSmart — '+title,{body,tag:key,renotify:true}); } catch(e){}
+  }
+}
+
+function nmStartMonitor() {
+  if (!window.firebase || !currentUser) return;
+  const role = currentUser.role;
+  const db = firebase.database();
+  if (role==='Petani') {
+    db.ref('/sensor/tanahPersen').on('value',s=>{ const v=s.val(); if(v!==null&&v<40) nmSend('tanahKering','💧 Tanah Kering!',`Kelembapan tanah ${v}% — segera nyalakan pompa.`,10); });
+    db.ref('/sensor/suhu').on('value',s=>{ const v=s.val(); if(v!==null&&v>33) nmSend('suhuPanas','🌡️ Suhu Terlalu Panas!',`Suhu ${v.toFixed(1)}°C — periksa kondisi tanaman.`,15); });
+    let pt=null;
+    db.ref('/sensor/pompa').on('value',s=>{ if(s.val()===true&&!pt){pt=setTimeout(()=>{nmSend('pompaTerlalu','⏹ Pompa Lama ON','Pompa menyala > 2 menit — cek kondisi lahan.',5);pt=null;},2*60*1000);}else if(s.val()===false){clearTimeout(pt);pt=null;} });
+  }
+  if (role==='Pengawas Lahan') {
+    let lu=Date.now();
+    db.ref('/sensor/lastUpdate').on('value',s=>{if(s.val())lu=Date.now();});
+    setInterval(()=>{if(Date.now()-lu>10*60*1000)nmSend('sensorOff','📡 Sensor Offline','Sensor kelembapan tidak mengirim data > 10 menit.',20);},60000);
+  }
+  if (role==='Teknisi') {
+    let lp=Date.now();
+    db.ref('/sensor/lastUpdate').on('value',s=>{if(s.val())lp=Date.now();});
+    setInterval(()=>{if(Date.now()-lp>5*60*1000)nmSend('esp32Off','📵 ESP32 Offline','Perangkat tidak terhubung ke jaringan selama 5 menit.',15);},60000);
+  }
+  if (role==='Administrator') {
+    let t0=Date.now();
+    db.ref('/sensor').on('value',()=>{const ms=Date.now()-t0;if(ms>5000)nmSend('serverDelay','⏱️ Server Delay',`Respon server ${(ms/1000).toFixed(1)} detik.`,10);t0=Date.now();});
+  }
+}
+
+// Hook skipSplash → tampilkan notif modal
+const _origSkipSplash = window.skipSplash;
+window.skipSplash = function() {
+  if (typeof _origSkipSplash === 'function') _origSkipSplash();
+  setTimeout(nmShow, 600);
+};
+</script>
+
+<script>
+// =====================================================
+//  CLOUD RUN CONFIG
+// =====================================================
+const CLOUD_RUN_URL = localStorage.getItem('cloud_run_url') || 'https://upload-padi-qg55cyk7ea-et.a.run.app';
+
+// =====================================================
+//  KAMERA PAGE
+// =====================================================
+function initKameraPage() {
+  loadImageGallery();
+  loadDetectionResults();
+}
+
+async function loadImageGallery() {
+  const crUrl = localStorage.getItem('cloud_run_url') || CLOUD_RUN_URL;
+  const grid = document.getElementById('gallery-grid');
+  const loading = document.getElementById('gallery-loading');
+  const empty = document.getElementById('gallery-empty');
+  const statusBar = document.getElementById('gcr-status-bar');
+  const statusMsg = document.getElementById('gcr-status-msg');
+
+  loading.style.display = 'block';
+  grid.style.display = 'none';
+  empty.style.display = 'none';
+  statusBar.style.display = 'none';
+
+  try {
+    const resp = await fetch(crUrl.replace(/\/$/, '') + '/images', { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const images = data.images || [];
+
+    document.getElementById('gal-count').textContent = images.length;
+    if (images.length > 0) {
+      const ts = images[0].created ? new Date(images[0].created).toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'}) : '--';
+      document.getElementById('gal-latest-time').textContent = ts;
+      document.getElementById('gal-device').textContent = images[0].device_id || '--';
+    }
+
+    loading.style.display = 'none';
+    if (images.length === 0) { empty.style.display = 'block'; return; }
+
+    grid.innerHTML = images.map(img => {
+      const imgUrl = crUrl.replace(/\/$/, '') + '/image/' + encodeURIComponent(img.filename);
+      const ts = img.created ? new Date(img.created).toLocaleString('id-ID', {dateStyle:'short',timeStyle:'short'}) : '';
+      return `<div class="gallery-card" onclick="showImageDetail('${imgUrl}','${img.filename}','${ts}','${img.device_id||''}')">
+        <img class="gallery-thumb" src="${imgUrl}" alt="${img.filename}"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="gallery-thumb-placeholder" style="display:none;">📷</div>
+        <div class="gallery-info">
+          <div class="fname">${img.filename}</div>
+          <div class="fmeta">${ts} · ${img.device_id||'unknown'}</div>
+        </div>
+      </div>`;
+    }).join('');
+    grid.style.display = 'grid';
+  } catch(e) {
+    loading.style.display = 'none';
+    statusBar.className = 'alert-banner danger';
+    statusBar.style.display = 'flex';
+    statusMsg.textContent = '⚠️ Gagal memuat galeri: ' + e.message + '. Pastikan URL Cloud Run sudah benar di Pengaturan.';
+    empty.style.display = 'block';
+  }
+}
+
+function showImageDetail(url, filename, ts, deviceId) {
+  document.getElementById('img-modal-src').src = url;
+  document.getElementById('img-modal-meta').textContent = filename + ' · ' + ts + (deviceId ? ' · ' + deviceId : '');
+  document.getElementById('img-modal').classList.add('active');
+}
+
+function closeImgModal(e) {
+  if (e.target === document.getElementById('img-modal')) {
+    document.getElementById('img-modal').classList.remove('active');
+  }
+}
+
+async function triggerCapture() {
+  showToast('info','📸','Memicu Capture...','Perintah dikirim ke ESP32-CAM via Firebase');
+  try {
+    const db = firebase.database();
+    await db.ref('/kontrol/capture').set({ trigger: true, ts: Date.now() });
+    showToast('ok','✅','Perintah Terkirim','ESP32-CAM akan mengambil foto saat ini.');
+    setTimeout(loadImageGallery, 5000);
+  } catch(e) {
+    showToast('warn','⚠️','Gagal','Tidak bisa kirim perintah capture ke Firebase.');
+  }
+}
+
+async function loadDetectionResults() {
+  const loading = document.getElementById('detection-loading');
+  const list = document.getElementById('detection-list');
+  const empty = document.getElementById('detection-empty');
+
+  loading.style.display = 'block';
+  list.innerHTML = '';
+  empty.style.display = 'none';
+
+  try {
+    const db = firebase.database();
+    const snap = await db.ref('/detections').limitToLast(20).get();
+    loading.style.display = 'none';
+
+    if (!snap.exists()) { empty.style.display = 'block'; return; }
+
+    const detections = [];
+    snap.forEach(child => detections.unshift({ id: child.key, ...child.val() }));
+
+    let total = detections.length, siap = 0, belum = 0, confSum = 0;
+    detections.forEach(d => {
+      if (d.result === 'siap') siap++;
+      else belum++;
+      confSum += (d.confidence || 0);
+    });
+    document.getElementById('det-total').textContent = total;
+    document.getElementById('det-siap').textContent = siap;
+    document.getElementById('det-belum').textContent = belum;
+    document.getElementById('det-confidence').textContent = total > 0 ? Math.round(confSum/total) + '%' : '--%';
+
+    const crUrl = localStorage.getItem('cloud_run_url') || CLOUD_RUN_URL;
+    list.innerHTML = detections.map(d => {
+      const ts = d.timestamp ? new Date(d.timestamp).toLocaleString('id-ID',{dateStyle:'short',timeStyle:'short'}) : '';
+      const imgUrl = d.filename ? crUrl.replace(/\/$/, '') + '/image/' + encodeURIComponent(d.filename) : '';
+      const badgeCls = d.result === 'siap' ? 'siap' : d.result === 'belum' ? 'belum' : 'proses';
+      const badgeTxt = d.result === 'siap' ? '✅ Siap Panen' : d.result === 'belum' ? '⏳ Belum Siap' : '🔄 Diproses';
+      return `<div class="detection-card">
+        ${imgUrl ? `<img class="detection-thumb" src="${imgUrl}" alt="foto" onerror="this.style.background='var(--grey-200)'">` : ''}
+        <div class="detection-body">
+          <strong>${d.filename || 'Analisis ' + d.id}</strong>
+          <p>${d.notes || 'Analisis kesiapan panen berdasarkan foto lahan.'}</p>
+          <div class="det-badges">
+            <span class="det-badge ${badgeCls}">${badgeTxt}</span>
+            ${d.confidence ? `<span class="det-badge proses">${d.confidence}% konfiden</span>` : ''}
+          </div>
+          <div class="det-stat">
+            ${ts ? `<div class="det-stat-item"><div class="dval" style="font-size:0.85rem;">${ts}</div><div class="dlbl">Waktu</div></div>` : ''}
+            ${d.device_id ? `<div class="det-stat-item"><div class="dval" style="font-size:0.85rem;">${d.device_id}</div><div class="dlbl">Device</div></div>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+  } catch(e) {
+    loading.style.display = 'none';
+    list.innerHTML = `<div class="alert-banner warn">⚠️ Gagal memuat deteksi: ${e.message}</div>`;
+  }
+}
+
+// =====================================================
+//  SETTINGS PAGE
+// =====================================================
+function initSettings() {
+  document.getElementById('set-cr-url').value = localStorage.getItem('cloud_run_url') || CLOUD_RUN_URL;
+  const savedInterval = localStorage.getItem('capture_interval') || '30000';
+  document.getElementById('set-interval').value = savedInterval;
+  const ngrokUrl = localStorage.getItem('esp32_api_url') || '';
+  document.getElementById('set-ngrok-url').value = ngrokUrl;
+  updateNotifPermStatus();
+  checkFirebaseStatus();
+}
+
+function saveCloudRunUrl() {
+  const url = document.getElementById('set-cr-url').value.trim();
+  if (!url) { showToast('warn','⚠️','URL Kosong','Masukkan URL Cloud Run terlebih dahulu.'); return; }
+  localStorage.setItem('cloud_run_url', url);
+  showToast('ok','✅','Tersimpan','URL Cloud Run berhasil disimpan.');
+}
+
+async function testCloudRunConnection() {
+  const url = document.getElementById('set-cr-url').value.trim() || CLOUD_RUN_URL;
+  const status = document.getElementById('cr-conn-status');
+  status.textContent = '⏳ Mengecek...';
+  status.style.color = 'var(--grey-500)';
+  try {
+    // /health tidak punya CORS header, gunakan /images yang sudah ada CORS
+    const resp = await fetch(url.replace(/\/$/, '') + '/images', { signal: AbortSignal.timeout(8000) });
+    if (resp.ok) {
+      const data = await resp.json();
+      status.textContent = '✅ Online — ' + (data.count || 0) + ' foto tersimpan';
+      status.style.color = 'var(--green-600)';
+      showToast('ok','✅','Cloud Run Online','Koneksi berhasil! ' + (data.count || 0) + ' foto di GCS.');
+    } else {
+      throw new Error('HTTP ' + resp.status);
+    }
+  } catch(e) {
+    status.textContent = '❌ Offline — ' + e.message;
+    status.style.color = 'var(--danger)';
+    showToast('warn','⚠️','Cloud Run Offline', e.message);
+  }
+}
+
+function saveInterval() {
+  const val = document.getElementById('set-interval').value;
+  localStorage.setItem('capture_interval', val);
+  showToast('ok','✅','Tersimpan','Interval capture diperbarui. Perlu reflash ESP32-CAM untuk berlaku.');
+}
+
+function saveNgrokUrl() {
+  const url = document.getElementById('set-ngrok-url').value.trim();
+  if (url) {
+    localStorage.setItem('esp32_api_url', url);
+    if (typeof REST_API !== 'undefined') REST_API.baseUrl = url;
+    showToast('ok','✅','Tersimpan','URL Ngrok ESP32 berhasil disimpan.');
+  } else {
+    localStorage.removeItem('esp32_api_url');
+    if (typeof REST_API !== 'undefined') REST_API.baseUrl = '';
+    showToast('info','ℹ️','Dihapus','REST API Ngrok dinonaktifkan.');
+  }
+}
+
+function updateNotifPermStatus() {
+  const el = document.getElementById('notif-perm-status');
+  const btn = document.getElementById('notif-perm-btn');
+  if (!('Notification' in window)) {
+    el.textContent = '❌ Tidak didukung browser';
+    el.style.color = 'var(--danger)';
+    btn.disabled = true;
+    return;
+  }
+  const p = Notification.permission;
+  if (p === 'granted') {
+    el.textContent = '✅ Diizinkan';
+    el.style.color = 'var(--green-600)';
+    btn.textContent = '✅ Aktif';
+    btn.style.background = 'var(--green-100)';
+    btn.style.color = 'var(--green-700)';
+  } else if (p === 'denied') {
+    el.textContent = '❌ Diblokir — aktifkan di pengaturan browser';
+    el.style.color = 'var(--danger)';
+    btn.textContent = '🔓 Buka Pengaturan Browser';
+  } else {
+    el.textContent = '⏳ Belum diizinkan';
+    el.style.color = 'var(--grey-500)';
+  }
+}
+
+async function requestNotifPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'denied') {
+    showToast('warn','⚠️','Diblokir','Aktifkan notifikasi secara manual di pengaturan browser.');
+    return;
+  }
+  const result = await Notification.requestPermission();
+  updateNotifPermStatus();
+  if (result === 'granted') {
+    showToast('ok','✅','Notifikasi Aktif!','Kamu akan menerima peringatan kondisi lahan.');
+    if (typeof nmStartMonitor === 'function' && typeof currentUser !== 'undefined' && currentUser) nmStartMonitor();
+  }
+}
+
+function checkFirebaseStatus() {
+  const el = document.getElementById('fb-conn-status');
+  try {
+    const db = firebase.database();
+    db.ref('/.info/connected').on('value', snap => {
+      if (snap.val() === true) {
+        el.textContent = '✅ Terhubung';
+        el.style.color = 'var(--green-600)';
+      } else {
+        el.textContent = '❌ Terputus';
+        el.style.color = 'var(--danger)';
+      }
+    });
+  } catch(e) {
+    el.textContent = '❌ Error: ' + e.message;
+    el.style.color = 'var(--danger)';
+  }
+}
+
+async function exportAllData() {
+  try {
+    const db = firebase.database();
+    const snap = await db.ref('/sensor').get();
+    const data = {
+      exported_at: new Date().toISOString(),
+      sensor: snap.exists() ? snap.val() : {},
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sawahsmart_export_' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('ok','📥','Export Berhasil','Data sensor berhasil diunduh.');
+  } catch(e) {
+    showToast('warn','⚠️','Gagal','Tidak dapat export data: ' + e.message);
+  }
+}
+
+function clearAllData() {
+  if (!confirm('Hapus semua data lokal? (Akun terdaftar, cache, pengaturan)\nTindakan ini tidak bisa dibatalkan.')) return;
+  localStorage.clear();
+  caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+  showToast('ok','🗑️','Data Dihapus','Semua data lokal berhasil dihapus. Halaman akan dimuat ulang.');
+  setTimeout(() => location.reload(), 1500);
+}
+
+// =====================================================
+//  PWA INSTALL
+// =====================================================
+let _pwaInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _pwaInstallPrompt = e;
+  const btn = document.getElementById('pwa-install-btn');
+  const st = document.getElementById('pwa-install-status');
+  if (btn) { btn.style.display = 'inline-flex'; }
+  if (st) st.style.display = 'none';
+});
+
+async function installPWA() {
+  if (!_pwaInstallPrompt) return;
+  _pwaInstallPrompt.prompt();
+  const { outcome } = await _pwaInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    showToast('ok','📲','SawahSmart Terpasang!','Aplikasi berhasil ditambahkan ke layar utama.');
+    _pwaInstallPrompt = null;
+    const btn = document.getElementById('pwa-install-btn');
+    if (btn) btn.style.display = 'none';
+    const st = document.getElementById('pwa-install-status');
+    if (st) { st.style.display = ''; st.textContent = '✅ Sudah terpasang'; }
+  }
+}
+
+// =====================================================
+//  SERVICE WORKER
+// =====================================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(e => console.warn('SW reg failed:', e));
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+# PlatformIO build artifacts
+firmware/.pio/
+firmware/.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# ML model files (large binary — track with Git LFS if needed)
+ml/models/*.joblib
+ml/models/*.pkl
+ml/models/*.h5
+
+# Dataset & large files
+*.zip
+padi.v10i.folder.zip
+ml/data/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Netlify
+.netlify/
+
+# Node
+node_modules/
