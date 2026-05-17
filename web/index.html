@@ -1906,26 +1906,46 @@ function updateNotifPermStatus() {
 
 // ==================== SENSOR DATA HISTORIS ====================
 function generateSensorData() {
-  const KEY = 'sawahsmart_sensor_data_v3';
+  // Hapus data lama v3 jika masih ada
+  localStorage.removeItem('sawahsmart_sensor_data_v3');
+
+  const KEY = 'sawahsmart_sensor_data_v4';
   let data = [];
   try { data = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { data = []; }
+
   const today = new Date(); today.setHours(0,0,0,0);
   const todayStr = today.toISOString().slice(0,10);
+
+  // Data HANYA dari 1 Mei 2026 ke atas, data sebelumnya tidak ada
+  const startDate = new Date('2026-05-01T00:00:00');
+
+  // Buang data lama yang mungkin masih ada sebelum 1 Mei
+  data = data.filter(d => d.date >= '2026-05-01');
+
   if (!data.some(d => d.date === todayStr)) {
-    for (let dd = 0; dd < 30; dd++) {
-      const date = new Date(today); date.setDate(date.getDate() - dd);
-      const dateStr = date.toISOString().slice(0,10);
-      if (data.some(r => r.date === dateStr)) continue;
-      const slots = [];
-      for (let h = 6; h <= 17; h++) for (let m = 0; m < 60; m += 15) slots.push(String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
-      slots.forEach(time => {
-        const suhu  = +(29.5 + (Math.random()*5 - 1)).toFixed(1);
-        const kel   = Math.round(60 + Math.random()*25);
-        const cahaya = Math.round(1500 + Math.random()*6000);
-        const tanah = Math.round(50 + Math.random()*30);
-        const status = suhu > 32 ? 'Panas' : suhu < 26 ? 'Dingin' : kel < 50 ? 'Kering' : 'Normal';
-        data.push({ date: dateStr, time, suhu, kel, cahaya, tanah, status });
-      });
+    const cur = new Date(startDate);
+    while (cur <= today) {
+      const dateStr = cur.toISOString().slice(0,10);
+      if (!data.some(r => r.date === dateStr)) {
+        const slots = [];
+        for (let h = 6; h <= 17; h++)
+          for (let m = 0; m < 60; m += 15)
+            slots.push(String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
+
+        // Seed berdasarkan tanggal supaya nilai konsisten tiap refresh
+        const seed = cur.getDate() + cur.getMonth() * 31;
+        const rng = (offset) => ((Math.sin(seed + offset) + 1) / 2);
+
+        slots.forEach((time, i) => {
+          const suhu   = +(29.5 + (rng(i) * 5 - 1)).toFixed(1);
+          const kel    = Math.round(60 + rng(i + 100) * 25);
+          const cahaya = Math.round(1500 + rng(i + 200) * 6000);
+          const tanah  = Math.round(50 + rng(i + 300) * 30);
+          const status = suhu > 32 ? 'Panas' : suhu < 26 ? 'Dingin' : kel < 50 ? 'Kering' : 'Normal';
+          data.push({ date: dateStr, time, suhu, kel, cahaya, tanah, status });
+        });
+      }
+      cur.setDate(cur.getDate() + 1);
     }
     localStorage.setItem(KEY, JSON.stringify(data));
   }
@@ -1933,11 +1953,12 @@ function generateSensorData() {
 }
 
 function initMonitoringFilter() {
-  const today = new Date().toISOString().slice(0,10);
+  const today  = new Date().toISOString().slice(0,10);
   const dari   = document.getElementById('filter-dari');
   const sampai = document.getElementById('filter-sampai');
-  if (dari && !dari.value)   dari.value   = today;
-  if (sampai && !sampai.value) sampai.value = today;
+  // Default: 1 Mei 2026 s/d hari ini
+  if (dari)   { dari.value = '2026-05-01'; dari.setAttribute('min', '2026-05-01'); }
+  if (sampai) { sampai.value = today; sampai.setAttribute('min', '2026-05-01'); }
   applyFilter();
 }
 
@@ -1950,10 +1971,12 @@ function applyFilter() {
   if (dari > sampai)    { info.textContent = '⚠️ Tanggal "Dari" tidak boleh lebih besar dari "Sampai".'; return; }
   const allData = generateSensorData();
   let filtered = allData.filter(d => d.date >= dari && d.date <= sampai);
-  filtered.sort((a,b) => (b.date+b.time).localeCompare(a.date+a.time));
+  // Urutan: terlama dulu (1 Mei tampil di atas)
+  filtered.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
   info.textContent = `Menampilkan ${filtered.length} data dari ${dari} s/d ${sampai}`;
   if (filtered.length === 0) { wrap.innerHTML = '<div style="text-align:center;padding:24px;color:var(--grey-400);">📭 Tidak ada data</div>'; return; }
-  const shown = filtered.slice(0, 200);
+  // Tampilkan semua tanpa limit
+  const shown = filtered;
   wrap.innerHTML = shown.map(d => {
     const sc = d.status === 'Normal' ? 'ok' : 'warn';
     return `<div style="border:1px solid var(--grey-200);border-radius:10px;padding:10px;margin-bottom:8px;background:white;">
@@ -1981,7 +2004,6 @@ function applyFilter() {
       </div>
     </div>`;
   }).join('');
-  if (filtered.length > 200) wrap.innerHTML += `<div style="text-align:center;font-size:0.8rem;color:var(--grey-400);padding:12px;">...dan ${filtered.length-200} data lagi. Gunakan Export CSV untuk data lengkap.</div>`;
 }
 
 function formatDateLabel(s) { return new Date(s + 'T00:00:00').toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}); }
