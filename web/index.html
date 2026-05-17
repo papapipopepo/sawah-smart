@@ -542,11 +542,36 @@ input, select, textarea { font-family: var(--font); }
 .sidebar-overlay.show { display: block; }
 
 /* ===== NOTIF PERMISSION MODAL ===== */
-#nm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 99999; display: flex; align-items: flex-end; justify-content: center; padding: 16px; animation: nmFadeIn 0.25s ease; }
+#nm-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.55);
+  z-index: 99999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  animation: nmFadeIn 0.25s ease;
+  -webkit-overflow-scrolling: touch;
+}
 #nm-overlay.nm-hidden { display: none !important; }
 @keyframes nmFadeIn { from{opacity:0} to{opacity:1} }
-@keyframes nmSlideUp { from{transform:translateY(50px);opacity:0} to{transform:translateY(0);opacity:1} }
-.nm-box { background: white; border-radius: 20px; padding: 22px 18px 18px; width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); animation: nmSlideUp 0.35s cubic-bezier(0.22,1,0.36,1); max-height: 85vh; overflow-y: auto; }
+@keyframes nmSlideUp { from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
+.nm-box {
+  background: white;
+  border-radius: 20px;
+  padding: 22px 18px 18px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  animation: nmSlideUp 0.35s cubic-bezier(0.22,1,0.36,1);
+  max-height: 90vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Pastikan tidak terpotong safe area di iPhone */
+  padding-bottom: max(18px, env(safe-area-inset-bottom));
+}
 .nm-icon-wrap { width: 54px; height: 54px; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto 12px; }
 .nm-title { text-align: center; font-size: 0.95rem; font-weight: 700; color: #111827; margin-bottom: 4px; }
 .nm-sub { text-align: center; font-size: 0.75rem; color: #6b7280; margin-bottom: 14px; line-height: 1.5; }
@@ -1303,6 +1328,42 @@ function saveAccounts(a) { localStorage.setItem('sawahsmart_accounts', JSON.stri
 let registeredAccounts = loadAccounts();
 let currentUser = null;
 
+// ==================== SESSION ====================
+function saveSession(user) {
+  localStorage.setItem('sawahsmart_session', JSON.stringify({
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    joinedAt: user.joinedAt,
+    lastLogin: user.lastLogin instanceof Date ? user.lastLogin.toISOString() : user.lastLogin,
+    prevLastLogin: user.prevLastLogin instanceof Date ? user.prevLastLogin.toISOString() : user.prevLastLogin,
+    isGuest: user.isGuest || false
+  }));
+}
+function clearSession() {
+  localStorage.removeItem('sawahsmart_session');
+}
+function loadSession() {
+  try {
+    const raw = localStorage.getItem('sawahsmart_session');
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s.isGuest) {
+      const stillExists = registeredAccounts.find(a => a.email === s.email);
+      if (!stillExists) { clearSession(); return null; }
+    }
+    return {
+      name: s.name,
+      email: s.email,
+      role: s.role || 'Petani',
+      joinedAt: s.joinedAt,
+      lastLogin: s.lastLogin ? new Date(s.lastLogin) : new Date(),
+      prevLastLogin: s.prevLastLogin ? new Date(s.prevLastLogin) : null,
+      isGuest: s.isGuest || false
+    };
+  } catch(e) { clearSession(); return null; }
+}
+
 // ==================== HELPERS ====================
 function formatDate(d) {
   return new Date(d).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }).replace(/\./g,'');
@@ -1411,6 +1472,7 @@ function doLogin() {
   saveAccounts(registeredAccounts);
 
   currentUser = { name: account.name, email: account.email, role: 'Petani', joinedAt: account.joinedAt, lastLogin: now, prevLastLogin: lastLogin, isGuest: false };
+  saveSession(currentUser);
   initApp();
   showPage('page-app');
   showInner('dashboard');
@@ -1419,6 +1481,7 @@ function doLogin() {
 
 function doGuestLogin() {
   currentUser = { name: 'Tamu / Demo', email: '-', role: 'Petani', isGuest: true, joinedAt: new Date(), lastLogin: new Date() };
+  // Mode tamu tidak disimpan ke session (selalu harus login ulang)
   initApp();
   showPage('page-app');
   showInner('dashboard');
@@ -1427,6 +1490,7 @@ function doGuestLogin() {
 
 function doLogout() {
   if (confirm('Apakah Anda yakin ingin keluar?')) {
+    clearSession();
     currentUser = null;
     showPage('page-login');
   }
@@ -1487,7 +1551,12 @@ function skipSplash() {
   const splash = document.getElementById('splash-screen');
   if (!splash) return;
   splash.classList.add('fade-out');
-  setTimeout(() => { splash.style.display = 'none'; setTimeout(nmShow, 500); }, 500);
+  setTimeout(() => {
+    splash.style.display = 'none';
+    // Delay lebih lama di mobile agar DOM & render selesai dulu
+    const delay = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 800 : 400;
+    setTimeout(nmShow, delay);
+  }, 500);
 }
 
 // ==================== TOAST ====================
@@ -1801,10 +1870,20 @@ function checkNotifTriggers(d) {
 // ==================== NOTIF PERMISSION ====================
 function nmShow() {
   if (!currentUser || currentUser.isGuest) return;
-  if (Notification.permission === 'granted') { return; }
+  // Cek apakah browser mendukung Notification API
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') return;
   if (Notification.permission === 'denied') return;
-  if (localStorage.getItem('nm_ok') === '1') return;
-  document.getElementById('nm-overlay').classList.remove('nm-hidden');
+  // Kalau user sudah klik "Izinkan" sebelumnya (dan granted), skip
+  if (localStorage.getItem('nm_ok') === '1' && Notification.permission === 'granted') return;
+  // Reset nm_ok kalau permission ternyata belum granted (misal di browser baru)
+  if (Notification.permission !== 'granted') localStorage.removeItem('nm_ok');
+
+  const overlay = document.getElementById('nm-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('nm-hidden');
+  // Paksa scroll ke atas pada overlay supaya terlihat di mobile
+  overlay.scrollTop = 0;
 }
 function nmClose() { document.getElementById('nm-overlay').classList.add('nm-hidden'); }
 async function nmAllow() {
@@ -2116,6 +2195,20 @@ async function installPWA() {
     const st  = document.getElementById('pwa-install-status'); if(st){ st.style.display=''; st.textContent='✅ Sudah terpasang'; }
   }
 }
+
+// ==================== AUTO RESTORE SESSION ====================
+(function restoreSessionOnLoad() {
+  const saved = loadSession();
+  if (saved) {
+    currentUser = saved;
+    initApp();
+    showPage('page-app');
+    showInner('dashboard');
+    // Tidak tampilkan splash saat restore session (langsung masuk)
+    // Tapi tetap cek popup notifikasi setelah sebentar
+    setTimeout(nmShow, 1200);
+  }
+})();
 
 // ==================== SERVICE WORKER ====================
 if ('serviceWorker' in navigator) {
