@@ -324,6 +324,36 @@ def image_resource(filename):
         return cors({"error": "Image not found"}, 404)
 
 
+# ============================================================
+# Capture-on-demand flag (in-memory, ephemeral)
+# Web POST untuk request capture, ESP32 GET untuk consume (auto-clear)
+# ============================================================
+_capture_requested = False
+_capture_request_ts = 0
+
+
+@app.route("/capture-request", methods=["GET", "POST", "OPTIONS"])
+def capture_request():
+    global _capture_requested, _capture_request_ts
+
+    if request.method == "OPTIONS":
+        return cors({}, 204)
+
+    if request.method == "POST":
+        # Web request: set flag
+        _capture_requested = True
+        _capture_request_ts = int(datetime.datetime.utcnow().timestamp())
+        print(f"[CAPTURE] Request received at ts={_capture_request_ts}")
+        return cors({"status": "ok", "requested": True, "ts": _capture_request_ts}, 201)
+
+    # GET (ESP32 polling): return flag dan auto-clear kalau true
+    was_requested = _capture_requested
+    if was_requested:
+        _capture_requested = False
+        print(f"[CAPTURE] ESP32 picked up request (was set at ts={_capture_request_ts})")
+    return cors({"capture": was_requested, "ts": _capture_request_ts})
+
+
 @app.route("/health", methods=["GET", "OPTIONS"])
 def health():
     if request.method == "OPTIONS":
@@ -334,6 +364,7 @@ def health():
         "bucket": GCS_BUCKET_NAME,
         "model_path": MODEL_PATH,
         "model_loaded": model_loaded,
+        "capture_pending": _capture_requested,
     })
 
 
