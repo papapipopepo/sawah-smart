@@ -17,11 +17,15 @@ build/
 .env
 .env.*
 !.env.example
+firmware/src/config.h
 
 # ML model files (large binary — track with Git LFS if needed)
 ml/models/*.joblib
 ml/models/*.pkl
 ml/models/*.h5
+ml/models/*.keras
+backend/models/
+backend/firebase_credentials.json
 
 # Dataset & large files
 *.zip
