@@ -477,6 +477,35 @@ input, select, textarea { font-family: var(--font); }
 .det-badge.belum  { background: #fffbeb; color: #92400e; }
 .det-badge.proses { background: #eff6ff; color: #1d4ed8; }
 
+/* Tombol delete (galeri + deteksi) */
+.gallery-card { position: relative; }
+.gallery-del-btn {
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(239,68,68,0.92); color: white; border: none;
+  width: 28px; height: 28px; border-radius: 50%;
+  font-size: 0.9rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 2;
+  transition: transform 0.15s, background 0.15s;
+}
+.gallery-del-btn:hover { background: #dc2626; transform: scale(1.1); }
+
+.detection-card { position: relative; }
+.detection-heatmap {
+  width: 120px; height: 90px; border-radius: 8px;
+  object-fit: cover; background: var(--grey-100);
+  border: 1px solid var(--grey-200);
+}
+
+.det-proba { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.det-proba-row {
+  display: grid; grid-template-columns: 90px 1fr 40px;
+  gap: 8px; align-items: center;
+  font-size: 0.72rem; color: var(--grey-700);
+}
+.det-proba-bar { height: 8px; background: var(--grey-100); border-radius: 999px; overflow: hidden; }
+.det-proba-bar > div { height: 100%; transition: width 0.4s; }
+
 /* ===== IMAGE MODAL ===== */
 .img-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 9500; align-items: center; justify-content: center; padding: 20px; }
 .img-modal-overlay.active { display: flex; }
@@ -1184,9 +1213,11 @@ input, select, textarea { font-family: var(--font); }
               <div style="font-size:0.875rem;font-weight:700;color:var(--grey-900);">Galeri Foto ESP32-CAM</div>
               <div style="font-size:0.775rem;color:var(--grey-500);margin-top:2px;">50 foto terbaru dari polybag</div>
             </div>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button onclick="loadImageGallery()" class="settings-btn secondary">🔄 Refresh</button>
               <button onclick="triggerCapture()" class="settings-btn" id="btn-capture">📸 Ambil Foto</button>
+              <button onclick="document.getElementById('manual-upload-input').click()" class="settings-btn">📤 Upload Manual</button>
+              <input type="file" id="manual-upload-input" accept="image/jpeg,image/jpg,image/png" style="display:none;" onchange="uploadManualImage(this.files[0])">
             </div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
@@ -1209,9 +1240,12 @@ input, select, textarea { font-family: var(--font); }
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
             <div>
               <div style="font-size:0.875rem;font-weight:700;color:var(--grey-900);">Hasil Deteksi Kesiapan Panen</div>
-              <div style="font-size:0.775rem;color:var(--grey-500);margin-top:2px;">Analisis AI dari foto tanaman</div>
+              <div style="font-size:0.775rem;color:var(--grey-500);margin-top:2px;">Analisis AI (CNN Hybrid + ExG) dari foto tanaman</div>
             </div>
-            <button onclick="loadDetectionResults()" class="settings-btn secondary">🔄 Refresh</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button onclick="loadDetectionResults()" class="settings-btn secondary">🔄 Refresh</button>
+              <button onclick="resetDetectionHistory()" class="settings-btn" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;">🗑 Reset History</button>
+            </div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
             <div class="card" style="text-align:center;padding:14px;"><div style="font-size:1.6rem;font-weight:700;font-family:var(--mono);color:var(--grey-900);" id="det-total">--</div><div style="font-size:0.72rem;color:var(--grey-500);margin-top:3px;">Total Analisis</div></div>
@@ -2212,12 +2246,19 @@ async function loadImageGallery() {
     grid.innerHTML = images.map(img => {
       const imgUrl = crUrl.replace(/\/$/,'') + '/image/' + encodeURIComponent(img.filename);
       const ts = img.created ? new Date(img.created).toLocaleString('id-ID',{dateStyle:'short',timeStyle:'short'}) : '';
-      return `<div class="gallery-card" onclick="showImageDetail('${imgUrl}','${img.filename}','${ts}','${img.device_id||''}')">
-        <img class="gallery-thumb" src="${imgUrl}" alt="${img.filename}" onerror="this.style.background='var(--grey-200)'">
-        <div class="gallery-info">
-          <div class="fname">${img.filename}</div>
-          <div class="fmeta">${ts} · ${img.device_id||'unknown'}</div>
+      const safeFname = String(img.filename).replace(/'/g, "\\'");
+      const safeTs = ts.replace(/'/g, "\\'");
+      const safeDev = String(img.device_id||'').replace(/'/g, "\\'");
+      return `<div class="gallery-card">
+        <div onclick="showImageDetail('${imgUrl}','${safeFname}','${safeTs}','${safeDev}')">
+          <img class="gallery-thumb" src="${imgUrl}" alt="${img.filename}" onerror="this.style.background='var(--grey-200)'">
+          <div class="gallery-info">
+            <div class="fname">${img.filename}</div>
+            <div class="fmeta">${ts} · ${img.device_id||'unknown'}</div>
+          </div>
         </div>
+        <button class="gallery-del-btn" title="Hapus foto"
+          onclick="event.stopPropagation(); deletePhoto('${safeFname}')">🗑</button>
       </div>`;
     }).join('');
     grid.style.display = 'grid';
@@ -2258,7 +2299,11 @@ async function loadDetectionResults() {
     const detections = [];
     snap.forEach(child => detections.unshift({ id: child.key, ...child.val() }));
     let total = detections.length, siap = 0, belum = 0, confSum = 0;
-    detections.forEach(d => { if(d.result==='siap') siap++; else belum++; confSum += (d.confidence||0); });
+    detections.forEach(d => {
+      if (d.label_id === 'siap' || d.result === 'siap') siap++;
+      else belum++;
+      confSum += (d.confidence || 0);
+    });
     document.getElementById('det-total').textContent = total;
     document.getElementById('det-siap').textContent  = siap;
     document.getElementById('det-belum').textContent = belum;
@@ -2267,24 +2312,170 @@ async function loadDetectionResults() {
     list.innerHTML = detections.map(d => {
       const ts = d.timestamp ? new Date(d.timestamp).toLocaleString('id-ID',{dateStyle:'short',timeStyle:'short'}) : '';
       const imgUrl = d.filename ? crUrl.replace(/\/$/,'') + '/image/' + encodeURIComponent(d.filename) : '';
-      const badgeCls = d.result === 'siap' ? 'siap' : d.result === 'belum' ? 'belum' : 'proses';
-      const badgeTxt = d.result === 'siap' ? '✅ Siap Panen' : d.result === 'belum' ? '⏳ Belum Siap' : '🔄 Diproses';
+      const safeId = String(d.id).replace(/'/g, "\\'");
+
+      // Mapping label 3-kelas → badge
+      const label = d.label || 'Unknown';
+      let labelBadge = '🔄 Diproses', labelCls = 'proses';
+      if (label === 'Mature')          { labelBadge = '✅ Matang (Siap Panen)'; labelCls = 'siap'; }
+      else if (label === 'Generative') { labelBadge = '🌾 Generatif';            labelCls = 'belum'; }
+      else if (label === 'Vegetative') { labelBadge = '🌱 Vegetatif';            labelCls = 'belum'; }
+      else if (d.result === 'siap')    { labelBadge = '✅ Siap Panen';           labelCls = 'siap'; }
+      else if (d.result === 'belum')   { labelBadge = '⏳ Belum Siap';           labelCls = 'belum'; }
+
+      const heatmapImg = d.exg_heatmap_b64
+        ? `<img class="detection-heatmap" src="data:image/png;base64,${d.exg_heatmap_b64}" alt="ExG heatmap" title="Indeks Vegetasi ExG">`
+        : '';
+
+      let probaBar = '';
+      if (d.probabilities) {
+        const p = d.probabilities;
+        const fmt = v => Math.round((v || 0) * 100);
+        probaBar = `
+          <div class="det-proba">
+            <div class="det-proba-row"><span>🌱 Vegetatif</span><div class="det-proba-bar"><div style="width:${fmt(p.Vegetative)}%;background:#22c55e;"></div></div><span>${fmt(p.Vegetative)}%</span></div>
+            <div class="det-proba-row"><span>🌾 Generatif</span><div class="det-proba-bar"><div style="width:${fmt(p.Generative)}%;background:#eab308;"></div></div><span>${fmt(p.Generative)}%</span></div>
+            <div class="det-proba-row"><span>✅ Matang</span><div class="det-proba-bar"><div style="width:${fmt(p.Mature)}%;background:#ef4444;"></div></div><span>${fmt(p.Mature)}%</span></div>
+          </div>`;
+      }
+
+      const greenFrac = (typeof d.green_fraction === 'number')
+        ? `<span class="det-badge proses" style="background:#f0fdf4;color:#166534;">Green: ${(d.green_fraction*100).toFixed(1)}%</span>`
+        : '';
+
       return `<div class="detection-card">
-        ${imgUrl ? `<img class="detection-thumb" src="${imgUrl}" alt="foto" onerror="this.style.background='var(--grey-200)'">` : ''}
+        <div style="display:flex;gap:8px;flex-direction:column;flex-shrink:0;">
+          ${imgUrl ? `<img class="detection-thumb" src="${imgUrl}" alt="foto" onerror="this.style.background='var(--grey-200)'">` : ''}
+          ${heatmapImg}
+        </div>
         <div class="detection-body">
           <strong>${d.filename || 'Analisis ' + d.id}</strong>
-          <p>${d.notes || 'Analisis kesiapan panen berdasarkan foto tanaman.'}</p>
+          <p>${d.notes || 'Klasifikasi fase padi menggunakan CNN Hybrid + Indeks Vegetasi ExG.'}</p>
           <div class="det-badges">
-            <span class="det-badge ${badgeCls}">${badgeTxt}</span>
-            ${d.confidence ? `<span class="det-badge proses">${d.confidence}% konfiden</span>` : ''}
+            <span class="det-badge ${labelCls}">${labelBadge}</span>
+            ${d.confidence ? `<span class="det-badge proses">${Math.round(d.confidence)}% konfiden</span>` : ''}
+            ${d.vi_name ? `<span class="det-badge proses">VI: ${d.vi_name}</span>` : ''}
+            ${greenFrac}
             ${ts ? `<span class="det-badge proses" style="background:var(--grey-100);color:var(--grey-700);">${ts}</span>` : ''}
           </div>
+          ${probaBar}
         </div>
+        <button class="gallery-del-btn" title="Hapus deteksi"
+          onclick="deleteDetection('${safeId}')">🗑</button>
       </div>`;
     }).join('');
   } catch(e) {
     loading.style.display = 'none';
     list.innerHTML = `<div class="alert-banner warn">⚠️ Gagal memuat deteksi: ${e.message}</div>`;
+  }
+}
+
+// ==================== UPLOAD MANUAL → /predict (CNN Hybrid + ExG) ====================
+async function uploadManualImage(file) {
+  if (!file) return;
+  const input = document.getElementById('manual-upload-input');
+
+  if (file.size > 8 * 1024 * 1024) {
+    showToast('warn','⚠️','File Terlalu Besar','Maksimal 8MB. Foto: ' + (file.size/1024/1024).toFixed(1) + 'MB');
+    input.value = ''; return;
+  }
+
+  const crUrl = (localStorage.getItem('cloud_run_url') || CLOUD_RUN_URL).replace(/\/$/, '');
+  const filename = 'manual_' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+
+  showToast('info','⏳','Menganalisis...','Upload + CNN inference. Mohon tunggu (~3-10 detik).');
+
+  try {
+    const resp = await fetch(crUrl + '/predict', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'X-Filename': filename,
+        'X-Device-ID': 'manual-upload'
+      },
+      body: file,
+      signal: AbortSignal.timeout(60000)
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({error: 'HTTP ' + resp.status}));
+      throw new Error(err.error || ('HTTP ' + resp.status));
+    }
+    const data = await resp.json();
+    const pred = data.prediction;
+
+    // Simpan ke Firebase /detections
+    const labelId = pred.label === 'Mature' ? 'siap' : 'belum';
+    await db.ref('/detections').push({
+      filename: data.filename,
+      timestamp: Date.now(),
+      device_id: 'manual-upload',
+      label: pred.label,
+      label_id: labelId,
+      confidence: Math.round(pred.confidence * 100),
+      probabilities: pred.probabilities,
+      vi_name: pred.vi_name,
+      vi_stats: pred.vi_stats,
+      green_fraction: pred.green_fraction,
+      exg_heatmap_b64: pred.exg_heatmap_b64,
+      notes: `Hasil CNN Hybrid + ExG: ${pred.label} (${Math.round(pred.confidence*100)}% konfiden)`
+    });
+
+    const labelText = pred.label === 'Mature' ? 'Matang (Siap Panen)'
+                    : pred.label === 'Generative' ? 'Generatif'
+                    : 'Vegetatif';
+    showToast('ok','✅','Deteksi Selesai', `${labelText} — ${Math.round(pred.confidence*100)}% konfiden`);
+
+    loadImageGallery();
+    loadDetectionResults();
+  } catch(e) {
+    showToast('warn','⚠️','Upload Gagal', e.message || 'Tidak bisa terhubung ke backend.');
+  } finally {
+    input.value = '';
+  }
+}
+
+// ==================== DELETE FOTO (dari GCS) ====================
+async function deletePhoto(filename) {
+  if (!confirm(`Hapus foto "${filename}" dari galeri?\n\nFoto akan dihapus dari Cloud Storage dan tidak bisa dikembalikan.`)) return;
+  const crUrl = (localStorage.getItem('cloud_run_url') || CLOUD_RUN_URL).replace(/\/$/, '');
+  try {
+    const resp = await fetch(crUrl + '/image/' + encodeURIComponent(filename), {
+      method: 'DELETE',
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({error: 'HTTP ' + resp.status}));
+      throw new Error(err.error || ('HTTP ' + resp.status));
+    }
+    showToast('ok','🗑','Foto Dihapus', filename);
+    loadImageGallery();
+  } catch(e) {
+    showToast('warn','⚠️','Gagal Hapus', e.message);
+  }
+}
+
+// ==================== DELETE DETEKSI tunggal (dari Firebase) ====================
+async function deleteDetection(id) {
+  if (!confirm('Hapus hasil deteksi ini dari history?')) return;
+  try {
+    await db.ref('/detections/' + id).remove();
+    showToast('ok','🗑','Deteksi Dihapus','Hasil deteksi telah dihapus.');
+    loadDetectionResults();
+  } catch(e) {
+    showToast('warn','⚠️','Gagal Hapus', e.message);
+  }
+}
+
+// ==================== RESET HISTORY (hapus semua /detections) ====================
+async function resetDetectionHistory() {
+  if (!confirm('⚠️ Reset SEMUA history deteksi?\n\nSemua hasil analisis akan dihapus dari Firebase. Foto di galeri TIDAK ikut terhapus.\n\nLanjutkan?')) return;
+  try {
+    await db.ref('/detections').remove();
+    showToast('ok','🗑','History Direset','Semua hasil deteksi telah dihapus.');
+    loadDetectionResults();
+  } catch(e) {
+    showToast('warn','⚠️','Gagal Reset', e.message);
   }
 }
 
