@@ -2279,12 +2279,24 @@ function closeImgModal(e) { if (e.target === document.getElementById('img-modal'
 
 async function triggerCapture() {
   if (currentUser && currentUser.isGuest) { showToast('warn','⚠️','Mode Demo','Tidak tersedia di mode demo.'); return; }
-  showToast('info','📸','Memicu Capture...','Perintah dikirim ke ESP32-CAM via Firebase');
+  showToast('info','📸','Memicu Capture...','Perintah dikirim ke ESP32-CAM');
+  const crUrl = (localStorage.getItem('cloud_run_url') || CLOUD_RUN_URL).replace(/\/$/, '');
   try {
-    await db.ref('/kontrol/capture').set({ trigger: true, ts: Date.now() });
-    showToast('ok','✅','Perintah Terkirim','ESP32-CAM akan mengambil foto.');
-    setTimeout(loadImageGallery, 5000);
-  } catch(e) { showToast('warn','⚠️','Gagal','Tidak bisa kirim perintah capture.'); }
+    // Kirim ke Cloud Run /capture-request (ESP32 polling endpoint ini)
+    const resp = await fetch(crUrl + '/capture-request', {
+      method: 'POST',
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+    // Juga set flag di Firebase /kontrol/capture untuk kompatibilitas
+    try { await db.ref('/kontrol/capture').set({ trigger: true, ts: Date.now() }); } catch(_) {}
+
+    showToast('ok','✅','Perintah Terkirim','ESP32-CAM akan mengambil foto dalam ~5-10 detik.');
+    setTimeout(loadImageGallery, 12000);
+  } catch(e) {
+    showToast('warn','⚠️','Gagal','Tidak bisa kirim perintah capture: ' + e.message);
+  }
 }
 
 async function loadDetectionResults() {
@@ -2323,9 +2335,7 @@ async function loadDetectionResults() {
       else if (d.result === 'siap')    { labelBadge = '✅ Siap Panen';           labelCls = 'siap'; }
       else if (d.result === 'belum')   { labelBadge = '⏳ Belum Siap';           labelCls = 'belum'; }
 
-      const heatmapImg = d.exg_heatmap_b64
-        ? `<img class="detection-heatmap" src="data:image/png;base64,${d.exg_heatmap_b64}" alt="ExG heatmap" title="Indeks Vegetasi ExG">`
-        : '';
+      const heatmapImg = !!d.exg_heatmap_b64;
 
       let probaBar = '';
       if (d.probabilities) {
@@ -2343,10 +2353,16 @@ async function loadDetectionResults() {
         ? `<span class="det-badge proses" style="background:#f0fdf4;color:#166534;">Green: ${(d.green_fraction*100).toFixed(1)}%</span>`
         : '';
 
+      const safeFname2 = String(d.filename || '').replace(/'/g, "\\'");
+      const safeTs2 = ts.replace(/'/g, "\\'");
+      const safeDev2 = String(d.device_id || '').replace(/'/g, "\\'");
       return `<div class="detection-card">
         <div style="display:flex;gap:8px;flex-direction:column;flex-shrink:0;">
-          ${imgUrl ? `<img class="detection-thumb" src="${imgUrl}" alt="foto" onerror="this.style.background='var(--grey-200)'">` : ''}
-          ${heatmapImg}
+          ${imgUrl ? `<img class="detection-thumb" src="${imgUrl}" alt="foto" style="cursor:pointer;"
+            onclick="showImageDetail('${imgUrl}','${safeFname2}','${safeTs2}','${safeDev2}')"
+            onerror="this.style.background='var(--grey-200)'">` : ''}
+          ${heatmapImg ? `<img class="detection-heatmap" src="data:image/png;base64,${d.exg_heatmap_b64}" alt="ExG heatmap" title="Klik untuk lihat besar" style="cursor:pointer;"
+            onclick="showImageDetail('data:image/png;base64,${d.exg_heatmap_b64}','ExG Heatmap — ${safeFname2}','${safeTs2}','')">` : ''}
         </div>
         <div class="detection-body">
           <strong>${d.filename || 'Analisis ' + d.id}</strong>
