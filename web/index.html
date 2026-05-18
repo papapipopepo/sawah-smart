@@ -490,6 +490,27 @@ input, select, textarea { font-family: var(--font); }
 }
 .gallery-del-btn:hover { background: #dc2626; transform: scale(1.1); }
 
+.gallery-analyze-btn {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(34, 197, 94, 0.95);
+  color: white;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  z-index: 2;
+  transition: transform 0.15s, background 0.15s;
+}
+.gallery-analyze-btn:hover { background: #16a34a; transform: scale(1.1); }
+
 .detection-card { position: relative; }
 .detection-heatmap {
   width: 120px; height: 90px; border-radius: 8px;
@@ -2257,6 +2278,8 @@ async function loadImageGallery() {
             <div class="fmeta">${ts} · ${img.device_id||'unknown'}</div>
           </div>
         </div>
+        <button class="gallery-analyze-btn" title="Analisis CNN + ExG"
+          onclick="event.stopPropagation(); analyzePhoto('${safeFname}','${safeDev}')">🔬</button>
         <button class="gallery-del-btn" title="Hapus foto"
           onclick="event.stopPropagation(); deletePhoto('${safeFname}')">🗑</button>
       </div>`;
@@ -2448,6 +2471,53 @@ async function uploadManualImage(file) {
     showToast('warn','⚠️','Upload Gagal', e.message || 'Tidak bisa terhubung ke backend.');
   } finally {
     input.value = '';
+  }
+}
+
+// ==================== ANALISIS foto existing (panggil /predict-existing) ====================
+async function analyzePhoto(filename, deviceId) {
+  if (currentUser && currentUser.isGuest) { showToast('warn','⚠️','Mode Demo','Tidak tersedia di mode demo.'); return; }
+  const crUrl = (localStorage.getItem('cloud_run_url') || CLOUD_RUN_URL).replace(/\/$/, '');
+
+  showToast('info','🔬','Menganalisis...','CNN + ExG sedang berjalan (~3-10 detik).');
+
+  try {
+    const resp = await fetch(crUrl + '/predict-existing/' + encodeURIComponent(filename), {
+      method: 'POST',
+      signal: AbortSignal.timeout(60000)
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({error: 'HTTP ' + resp.status}));
+      throw new Error(err.error || ('HTTP ' + resp.status));
+    }
+    const data = await resp.json();
+    const pred = data.prediction;
+
+    const labelId = pred.label === 'Mature' ? 'siap' : 'belum';
+    await db.ref('/detections').push({
+      filename: data.filename,
+      timestamp: Date.now(),
+      device_id: data.device_id || deviceId || 'esp32-cam',
+      label: pred.label,
+      label_id: labelId,
+      confidence: Math.round(pred.confidence * 100),
+      probabilities: pred.probabilities,
+      vi_name: pred.vi_name,
+      vi_stats: pred.vi_stats,
+      green_fraction: pred.green_fraction,
+      exg_heatmap_b64: pred.exg_heatmap_b64,
+      notes: `Hasil CNN Hybrid + ExG: ${pred.label} (${Math.round(pred.confidence*100)}% konfiden)`
+    });
+
+    const labelText = pred.label === 'Mature' ? 'Matang (Siap Panen)'
+                    : pred.label === 'Generative' ? 'Generatif'
+                    : 'Vegetatif';
+    showToast('ok','✅','Analisis Selesai', `${labelText} — ${Math.round(pred.confidence*100)}% konfiden`);
+
+    loadDetectionResults();
+  } catch(e) {
+    showToast('warn','⚠️','Analisis Gagal', e.message || 'Tidak bisa terhubung ke backend.');
   }
 }
 
