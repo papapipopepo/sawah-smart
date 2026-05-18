@@ -1530,6 +1530,9 @@ function initApp() {
     const el = document.getElementById(id);
     if (el) { el.disabled = currentUser.isGuest; el.style.opacity = currentUser.isGuest ? '0.5' : '1'; }
   });
+
+  // Update status tanaman & dashboard (hari ke-N, fase, estimasi panen)
+  setTimeout(renderTanamanPage, 100);
 }
 
 // ==================== SPLASH ====================
@@ -1648,6 +1651,7 @@ db.ref('/sensor').on('value', (snap) => {
   updateParamTable();
   updateHealthScore(d);
   checkNotifTriggers(d);
+  recordSensorSnapshot(d);
 });
 
 // Topbar update time
@@ -1658,6 +1662,43 @@ db.ref('/sensor').on('value', () => {
     sub.innerHTML = '<span class="live-dot"></span>Real-time · Diperbarui ' + t + ' WIB';
   }
 });
+
+// ==================== REKAM DATA SENSOR REAL ====================
+let _lastRecordedSlot = null;
+function recordSensorSnapshot(d) {
+  if (!d || d.suhu === undefined) return;
+  const now   = new Date();
+  const hh    = String(now.getHours()).padStart(2,'0');
+  const mm    = String(Math.floor(now.getMinutes() / 15) * 15).padStart(2,'0');
+  const slot  = hh + ':' + mm;
+  const dateStr = now.toISOString().slice(0,10);
+  const key   = dateStr + 'T' + slot;
+  if (_lastRecordedSlot === key) return; // sudah direkam slot ini
+  _lastRecordedSlot = key;
+
+  const KEY = 'sawahsmart_sensor_data_v6';
+  let data = [];
+  try { data = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { data = []; }
+
+  // Hapus entri simulasi untuk slot yang sama (ganti dengan data real)
+  data = data.filter(r => !(r.date === dateStr && r.time === slot && r.isSimulated));
+
+  const status = (d.suhu > 32) ? 'Panas' : (d.suhu < 26) ? 'Dingin' : (d.kelembapan < 50) ? 'Kering' : 'Normal';
+  data.push({
+    date: dateStr,
+    time: slot,
+    suhu:   d.suhu     ? +d.suhu.toFixed(1)          : null,
+    kel:    d.kelembapan ? Math.round(d.kelembapan)   : null,
+    cahaya: d.cahaya   ? Math.round(d.cahaya)         : null,
+    tanah:  d.tanahPersen !== undefined ? d.tanahPersen : null,
+    status,
+    isReal: true
+  });
+
+  // Batasi maks 5000 record agar localStorage tidak penuh
+  if (data.length > 5000) data = data.slice(data.length - 5000);
+  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch(e) {}
+}
 
 // ==================== POMPA ====================
 const REST_API = {
@@ -1679,13 +1720,41 @@ const REST_API = {
 
 async function togglePompa(on) {
   if (currentUser && currentUser.isGuest) { showToast('warn','⚠️','Mode Demo','Kontrol pompa tidak tersedia di mode demo.'); return; }
-  db.ref('/kontrol/pompa').set(on);
+
+  // Disable tombol sementara agar tidak double-click
+  const btnOn  = document.getElementById('btn-pompa-on');
+  const btnOff = document.getElementById('btn-pompa-off');
+  if (btnOn)  { btnOn.disabled  = true; btnOn.style.opacity  = '0.6'; }
+  if (btnOff) { btnOff.disabled = true; btnOff.style.opacity = '0.6'; }
+
+  // 1. Kirim ke Firebase
+  try {
+    await db.ref('/kontrol/pompa').set(on);
+  } catch(e) {
+    showToast('danger','❌','Firebase Gagal','Perintah tidak bisa dikirim: ' + e.message);
+    if (btnOn)  { btnOn.disabled  = false; btnOn.style.opacity  = '1'; }
+    if (btnOff) { btnOff.disabled = false; btnOff.style.opacity = '1'; }
+    return;
+  }
+
+  // 2. Kirim ke ESP32 via REST API (Ngrok) jika tersedia
   if (REST_API.baseUrl) {
     const ok = await REST_API.setPompa(on);
-    showToast(ok?'ok':'info', on?'💧':'⏹', 'Pompa ' + (on?'Dinyalakan':'Dimatikan'), ok ? 'Perintah terkirim via REST API ✅' : 'Firebase berhasil, REST API tidak tersedia');
+    if (ok) {
+      showToast('ok', on?'💧':'⏹', 'Pompa ' + (on?'Dinyalakan':'Dimatikan'),
+        'Perintah terkirim ke Firebase ✅ & ESP32 via REST API ✅');
+    } else {
+      showToast('warn','⚠️','Perintah Sebagian Terkirim',
+        'Firebase ✅ berhasil, tapi ESP32 via Ngrok ❌ tidak merespons.\n👉 Cek URL Ngrok di Pengaturan — mungkin sudah expired.');
+    }
   } else {
-    showToast('ok', on?'💧':'⏹', 'Pompa ' + (on?'Dinyalakan':'Dimatikan'), 'Perintah dikirim ke Firebase');
+    showToast('ok', on?'💧':'⏹', 'Pompa ' + (on?'Dinyalakan':'Dimatikan'),
+      'Perintah dikirim ke Firebase ✅\n⚠️ URL Ngrok belum diatur — ESP32 hanya baca Firebase.');
   }
+
+  // Re-enable tombol
+  if (btnOn)  { btnOn.disabled  = false; btnOn.style.opacity  = '1'; }
+  if (btnOff) { btnOff.disabled = false; btnOff.style.opacity = '1'; }
 }
 
 // ==================== PARAMETER TABLE ====================
@@ -1761,7 +1830,7 @@ function renderTanamanPage() {
     const faseCls   = hariKe <= 45 ? 'vegetatif' : hariKe <= 75 ? 'generatif' : 'panen';
     const faseEmoji = hariKe <= 45 ? '🌿' : hariKe <= 75 ? '🌾' : '✨';
     if (faseBadge) { faseBadge.className = 'fase-badge ' + faseCls; faseBadge.textContent = faseEmoji + ' Fase ' + fase; }
-    const dashHari = document.getElementById('dash-hari'); if(dashHari) dashHari.textContent = 'Hari ke-' + hariKe + ' · Estimasi panen ' + sisa + ' hari lagi';
+    const dashHari = document.getElementById('dash-hari'); if(dashHari) dashHari.textContent = 'Hari ke-' + hariKe + ' · ' + (sisa > 0 ? 'Estimasi panen ' + sisa + ' hari lagi' : '🌾 Siap Panen!');
   } else {
     ['tan-tgl','tan-hari','tan-fase','tan-panen'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent = '-'; });
   }
@@ -1769,8 +1838,12 @@ function renderTanamanPage() {
 }
 
 function getTanamanInfo() {
-  try { return JSON.parse(localStorage.getItem('sawahsmart_tanaman') || '{}'); }
-  catch(e) { return {}; }
+  try {
+    const saved = JSON.parse(localStorage.getItem('sawahsmart_tanaman') || '{}');
+    // Default tanggal tanam 1 Mei 2026 jika belum diisi
+    if (!saved.tglTanam) saved.tglTanam = '2026-05-01';
+    return saved;
+  } catch(e) { return { tglTanam: '2026-05-01' }; }
 }
 function saveTanamanInfo() {
   const varietas = document.getElementById('set-varietas').value.trim();
@@ -1906,10 +1979,12 @@ function updateNotifPermStatus() {
 
 // ==================== SENSOR DATA HISTORIS ====================
 function generateSensorData() {
-  // Hapus data lama v3 jika masih ada
+  // Hapus data lama v3 & v4 jika masih ada (slot lama hanya sampai 17:45)
   localStorage.removeItem('sawahsmart_sensor_data_v3');
+  localStorage.removeItem('sawahsmart_sensor_data_v4');
+  localStorage.removeItem('sawahsmart_sensor_data_v5');
 
-  const KEY = 'sawahsmart_sensor_data_v4';
+  const KEY = 'sawahsmart_sensor_data_v6';
   let data = [];
   try { data = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { data = []; }
 
@@ -1928,7 +2003,7 @@ function generateSensorData() {
       const dateStr = cur.toISOString().slice(0,10);
       if (!data.some(r => r.date === dateStr)) {
         const slots = [];
-        for (let h = 6; h <= 17; h++)
+        for (let h = 0; h <= 23; h++)
           for (let m = 0; m < 60; m += 15)
             slots.push(String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
 
@@ -1937,12 +2012,36 @@ function generateSensorData() {
         const rng = (offset) => ((Math.sin(seed + offset) + 1) / 2);
 
         slots.forEach((time, i) => {
-          const suhu   = +(29.5 + (rng(i) * 5 - 1)).toFixed(1);
-          const kel    = Math.round(60 + rng(i + 100) * 25);
-          const cahaya = Math.round(1500 + rng(i + 200) * 6000);
-          const tanah  = Math.round(50 + rng(i + 300) * 30);
+          const hour = parseInt(time.slice(0,2));
+          const isMalam = hour < 6 || hour >= 20; // jam 20:00 - 05:45 = malam
+          const isSiang = hour >= 10 && hour <= 15; // jam 10:00 - 15:45 = siang terik
+
+          // Suhu: siang 29-34°C, malam 24-27°C
+          const suhu = isMalam
+            ? +(24 + rng(i) * 3).toFixed(1)
+            : isSiang
+              ? +(30 + rng(i) * 4).toFixed(1)
+              : +(27 + rng(i) * 4).toFixed(1);
+
+          // Kelembapan: malam lebih tinggi (70-90%), siang lebih rendah (55-75%)
+          const kel = isMalam
+            ? Math.round(70 + rng(i + 100) * 20)
+            : Math.round(55 + rng(i + 100) * 20);
+
+          // Cahaya: malam = 0 lux, pagi/sore rendah, siang tinggi
+          const cahaya = isMalam
+            ? 0
+            : isSiang
+              ? Math.round(4000 + rng(i + 200) * 4000)
+              : Math.round(500 + rng(i + 200) * 3000);
+
+          // Tanah: relatif stabil, malam sedikit lebih lembap
+          const tanah = isMalam
+            ? Math.round(55 + rng(i + 300) * 20)
+            : Math.round(45 + rng(i + 300) * 30);
+
           const status = suhu > 32 ? 'Panas' : suhu < 26 ? 'Dingin' : kel < 50 ? 'Kering' : 'Normal';
-          data.push({ date: dateStr, time, suhu, kel, cahaya, tanah, status });
+          data.push({ date: dateStr, time, suhu, kel, cahaya, tanah, status, isSimulated: true });
         });
       }
       cur.setDate(cur.getDate() + 1);
