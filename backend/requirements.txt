@@ -1,2 +1,8 @@
 flask==3.0.3
 google-cloud-storage==2.18.2
+tensorflow-cpu==2.16.2
+numpy==1.26.4
+Pillow==10.4.0
+opencv-python-headless==4.10.0.84
+scikit-image==0.24.0
+matplotlib==3.9.2
