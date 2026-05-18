@@ -324,6 +324,45 @@ def image_resource(filename):
         return cors({"error": "Image not found"}, 404)
 
 
+@app.route("/predict-existing/<filename>", methods=["POST", "OPTIONS"])
+def predict_existing(filename):
+    """Jalankan inferensi CNN pada foto yang sudah ada di GCS (tanpa re-upload)."""
+    if request.method == "OPTIONS":
+        return cors({}, 204)
+
+    try:
+        bucket = storage_client.bucket(GCS_BUCKET_NAME)
+        blob = bucket.blob(f"uploads/{filename}")
+
+        if not blob.exists():
+            return cors({"error": "File not found in GCS"}, 404)
+
+        # Download photo dari GCS
+        image_data = blob.download_as_bytes()
+        blob.reload()
+        device_id = (blob.metadata or {}).get("device_id", "unknown")
+
+        # Decode & inferensi
+        rgb = decode_jpeg_to_rgb(image_data)
+        prediction = predict_hybrid_cnn(rgb)
+
+        print(f"[PREDICT-EXISTING] {filename}: {prediction['label']} "
+              f"({prediction['confidence']*100:.1f}%) device={device_id}")
+
+        return cors({
+            "status": "ok",
+            "filename": filename,
+            "device_id": device_id,
+            "prediction": prediction,
+        }, 200)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[ERROR] predict_existing failed: {e}")
+        return cors({"error": str(e)}, 500)
+
+
 # ============================================================
 # Capture-on-demand flag (in-memory, ephemeral)
 # Web POST untuk request capture, ESP32 GET untuk consume (auto-clear)
