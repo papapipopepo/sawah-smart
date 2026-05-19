@@ -2332,7 +2332,8 @@ async function loadDetectionResults() {
     loading.style.display = 'none';
     if (!snap.exists()) { empty.style.display = 'block'; return; }
     const detections = [];
-    snap.forEach(child => detections.unshift({ id: child.key, ...child.val() }));
+    // PENTING: wrap dalam braces — kalau implicit return truthy, Firebase forEach BERHENTI iterasi
+    snap.forEach(child => { detections.unshift({ id: child.key, ...child.val() }); });
     let total = detections.length, siap = 0, belum = 0, confSum = 0;
     detections.forEach(d => {
       if (d.label_id === 'siap' || d.result === 'siap') siap++;
