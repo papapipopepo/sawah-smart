@@ -168,8 +168,8 @@ bool initCamera() {
   s->set_wpc(s, 1);           // white pixel correction ON
   s->set_raw_gma(s, 1);       // gamma correction
   s->set_lenc(s, 1);          // lens correction (kurangi vignetting)
-  s->set_hmirror(s, 0);
-  s->set_vflip(s, 0);
+  s->set_hmirror(s, 1);   // flip horizontal (untuk rotate 180° kombinasi dgn vflip)
+  s->set_vflip(s, 1);     // flip vertical — sesuaikan kalau kamera mounting beda
   s->set_dcw(s, 1);           // downsize EN
   s->set_colorbar(s, 0);
 
