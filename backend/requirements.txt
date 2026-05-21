@@ -7,4 +7,7 @@ opencv-python-headless==4.10.0.84
 scikit-image==0.24.0
 matplotlib==3.9.2
 openai==1.54.3
-langfuse==3.3.4
+# Langfuse v2 (BUKAN v3) — v3 pakai OpenTelemetry yg butuh protobuf>=5,
+# konflik dgn tensorflow-cpu (butuh protobuf<5). v2 tidak pakai OTel jadi aman.
+# Kode lf_observe() support v2 via fallback `from langfuse.decorators import observe`.
+langfuse>=2.0.0,<3.0.0
