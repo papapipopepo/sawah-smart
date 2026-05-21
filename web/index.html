@@ -2410,6 +2410,22 @@ async function loadDetectionResults() {
   }
 }
 
+// ==================== Handle hasil validasi yang ditolak ====================
+function handleRejected(data) {
+  const reason = data.reject_reason;
+  const v = data.validation || {};
+  if (reason === 'blur') {
+    showToast('warn','📷','Foto Buram',
+      `Kualitas foto kurang tajam (skor ${v.blur_score ?? '?'}). Ambil ulang: jaga kamera stabil, jarak 15-30cm, pencahayaan cukup.`);
+  } else if (reason === 'not_rice') {
+    const why = v.llm_check?.reason ? ' — ' + v.llm_check.reason : '';
+    showToast('warn','🚫','Bukan Tanaman Padi',
+      `Gambar terdeteksi bukan padi${why}. Tidak disimpan ke hasil deteksi.`);
+  } else {
+    showToast('warn','⚠️','Foto Ditolak','Foto tidak lolos validasi.');
+  }
+}
+
 // ==================== UPLOAD MANUAL → /predict (CNN Hybrid + ExG) ====================
 async function uploadManualImage(file) {
   if (!file) return;
@@ -2442,6 +2458,13 @@ async function uploadManualImage(file) {
       throw new Error(err.error || ('HTTP ' + resp.status));
     }
     const data = await resp.json();
+
+    // Cek hasil validasi (blur / bukan padi) — tidak disimpan ke history
+    if (data.status === 'rejected') {
+      handleRejected(data);
+      return;
+    }
+
     const pred = data.prediction;
 
     // Simpan ke Firebase /detections
@@ -2493,6 +2516,12 @@ async function analyzePhoto(filename, deviceId) {
       throw new Error(err.error || ('HTTP ' + resp.status));
     }
     const data = await resp.json();
+
+    if (data.status === 'rejected') {
+      handleRejected(data);
+      return;
+    }
+
     const pred = data.prediction;
 
     const labelId = pred.label === 'Mature' ? 'siap' : 'belum';
