@@ -1,11 +1,21 @@
 """
 Cloud Run service: upload_padi + predict
-- POST   /upload          : Terima JPEG dari ESP32-CAM, simpan ke GCS
-- POST   /predict         : Upload JPEG + jalankan inferensi CNN Hybrid + ExG heatmap
-- GET    /images          : List gambar terbaru dari GCS (JSON)
-- GET    /image/<name>    : Serve gambar dari GCS (proxy)
-- DELETE /image/<name>    : Hapus gambar dari GCS
-- GET    /health          : Health check
+- POST   /upload                  : Terima JPEG dari ESP32-CAM, simpan ke GCS
+- POST   /predict                 : Validasi (blur+LLM) → upload → inferensi CNN Hybrid + ExG
+- POST   /predict-existing/<name> : Validasi + inferensi foto yang sudah ada di GCS
+- GET    /images                  : List gambar terbaru dari GCS (JSON)
+- GET    /image/<name>            : Serve gambar dari GCS (proxy)
+- DELETE /image/<name>            : Hapus gambar dari GCS
+- GET    /health                  : Health check
+
+Validasi 3-lapis sebelum inferensi:
+  1. Blur check (Laplacian variance < BLUR_THRESHOLD → reject 'blur')
+  2. LLM gatekeeper (GPT-4o-mini: padi/bukan → reject 'not_rice')
+  3. CNN Hybrid + ExG → klasifikasi fase
+
+Env vars: GCS_BUCKET_NAME, MODEL_PATH, OPENAI_API_KEY (untuk gatekeeper),
+  BLUR_THRESHOLD (default 100), LLM_GATEKEEPER_MODEL (default gpt-4o-mini),
+  LLM_GATEKEEPER_ENABLED (default true), LANGFUSE_* (opsional, tracking)
 """
 
 import os
@@ -23,6 +33,11 @@ GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "padi-images-thesis-496412")
 MODEL_PATH = os.environ.get("MODEL_PATH", "/app/models/best_hybrid_cnn_ExG.keras")
 CNN_IMG_SIZE = 224
 CLASS_ORDER = ["Vegetative", "Generative", "Mature"]
+
+# Validasi gambar (3-lapis: blur + LLM gatekeeper)
+BLUR_THRESHOLD = float(os.environ.get("BLUR_THRESHOLD", "100"))  # Laplacian variance; < ini = buram
+LLM_GATEKEEPER_MODEL = os.environ.get("LLM_GATEKEEPER_MODEL", "gpt-4o-mini")
+LLM_GATEKEEPER_ENABLED = os.environ.get("LLM_GATEKEEPER_ENABLED", "true").lower() == "true"
 
 storage_client = storage.Client()
 
@@ -171,6 +186,122 @@ def predict_hybrid_cnn(rgb):
 
 
 # ============================================================
+# Validasi gambar 3-lapis: blur → LLM gatekeeper
+# ============================================================
+
+# Langfuse opsional (graceful) — dukung v3 (from langfuse) & v2 (langfuse.decorators)
+try:
+    from langfuse import observe as _observe          # langfuse v3+
+except Exception:
+    try:
+        from langfuse.decorators import observe as _observe  # langfuse v2
+    except Exception:
+        _observe = None
+
+
+def lf_observe(name):
+    """Decorator: pakai langfuse @observe kalau tersedia, else no-op."""
+    def deco(fn):
+        if _observe is None:
+            return fn
+        try:
+            return _observe(name=name)(fn)
+        except Exception:
+            return fn
+    return deco
+
+
+def blur_score(rgb):
+    """Variance of Laplacian — ukuran ketajaman. Rendah = buram."""
+    import cv2
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    return float(cv2.Laplacian(gray, cv2.CV_64F).var())
+
+
+@lf_observe("llm-gatekeeper")
+def llm_gatekeeper(image_data):
+    """LLM cek apakah gambar = tanaman padi. Return dict.
+
+    Kalau OPENAI_API_KEY tidak ada / error → fail-open (anggap padi, enabled=False).
+    """
+    result = {"enabled": False, "is_rice": True, "reason": "", "tokens": 0}
+
+    if not LLM_GATEKEEPER_ENABLED:
+        result["reason"] = "gatekeeper disabled"
+        return result
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        result["reason"] = "OPENAI_API_KEY not set"
+        return result
+
+    try:
+        import json
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        b64 = base64.b64encode(image_data).decode("utf-8")
+
+        system = (
+            "Kamu ahli agronomi padi. Tentukan apakah gambar menampilkan TANAMAN PADI "
+            "(sawah, daun padi, malai, atau bulir padi) atau BUKAN padi "
+            "(orang, hewan, objek, tanaman lain, ruangan, dll). "
+            "Balas HANYA JSON: "
+            '{"is_rice": true|false, "reason": "penjelasan visual singkat"}'
+        )
+        resp = client.chat.completions.create(
+            model=LLM_GATEKEEPER_MODEL,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": [
+                    {"type": "text", "text": "Apakah gambar ini tanaman padi?"},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:image/jpeg;base64,{b64}"}},
+                ]},
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=150,
+            temperature=0.0,
+        )
+        parsed = json.loads(resp.choices[0].message.content)
+        result["enabled"] = True
+        result["is_rice"] = bool(parsed.get("is_rice", True))
+        result["reason"] = str(parsed.get("reason", ""))
+        result["tokens"] = resp.usage.total_tokens if resp.usage else 0
+    except Exception as e:
+        # Fail-open: kalau LLM error, jangan blokir prediksi
+        result["reason"] = f"gatekeeper error (fail-open): {e}"
+        print(f"[GATEKEEPER] error: {e}")
+
+    return result
+
+
+def validate_image(rgb, image_data):
+    """Pipeline validasi: (1) blur check, (2) LLM gatekeeper.
+
+    Return (ok: bool, reject_reason: str|None, info: dict)
+    reject_reason: 'blur' | 'not_rice' | None
+    """
+    info = {}
+
+    # Lapis 1: blur (murah, jalan duluan)
+    bscore = blur_score(rgb)
+    info["blur_score"] = round(bscore, 2)
+    info["blur_threshold"] = BLUR_THRESHOLD
+    if bscore < BLUR_THRESHOLD:
+        print(f"[VALIDATE] REJECT blur — score={bscore:.1f} < {BLUR_THRESHOLD}")
+        return False, "blur", info
+
+    # Lapis 2: LLM gatekeeper (padi/bukan)
+    gate = llm_gatekeeper(image_data)
+    info["llm_check"] = gate
+    if gate.get("enabled") and not gate.get("is_rice", True):
+        print(f"[VALIDATE] REJECT not_rice — {gate.get('reason')}")
+        return False, "not_rice", info
+
+    return True, None, info
+
+
+# ============================================================
 # Endpoints
 # ============================================================
 @app.route("/upload", methods=["POST", "OPTIONS"])
@@ -229,7 +360,18 @@ def predict():
         filename = f"padi_{device_id}_{ts}.jpg"
 
     try:
-        # 1. Upload ke GCS
+        # 1. Decode + validasi 3-lapis (blur → LLM gatekeeper) SEBELUM upload
+        rgb = decode_jpeg_to_rgb(image_data)
+        ok, reject_reason, vinfo = validate_image(rgb, image_data)
+        if not ok:
+            return cors({
+                "status": "rejected",
+                "filename": filename,
+                "reject_reason": reject_reason,   # 'blur' | 'not_rice'
+                "validation": vinfo,
+            }, 200)
+
+        # 2. Lolos validasi → upload ke GCS
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
         blob = bucket.blob(f"uploads/{filename}")
         blob.upload_from_string(image_data, content_type="image/jpeg")
@@ -238,9 +380,9 @@ def predict():
 
         gcs_path = f"gs://{GCS_BUCKET_NAME}/uploads/{filename}"
 
-        # 2. Decode & inferensi
-        rgb = decode_jpeg_to_rgb(image_data)
+        # 3. Inferensi CNN
         prediction = predict_hybrid_cnn(rgb)
+        prediction["validation"] = vinfo
 
         print(f"[PREDICT] {filename}: {prediction['label']} "
               f"({prediction['confidence']*100:.1f}%) from {device_id}")
@@ -342,9 +484,21 @@ def predict_existing(filename):
         blob.reload()
         device_id = (blob.metadata or {}).get("device_id", "unknown")
 
-        # Decode & inferensi
+        # Decode + validasi 3-lapis (blur → LLM gatekeeper)
         rgb = decode_jpeg_to_rgb(image_data)
+        ok, reject_reason, vinfo = validate_image(rgb, image_data)
+        if not ok:
+            return cors({
+                "status": "rejected",
+                "filename": filename,
+                "device_id": device_id,
+                "reject_reason": reject_reason,
+                "validation": vinfo,
+            }, 200)
+
+        # Lolos → inferensi
         prediction = predict_hybrid_cnn(rgb)
+        prediction["validation"] = vinfo
 
         print(f"[PREDICT-EXISTING] {filename}: {prediction['label']} "
               f"({prediction['confidence']*100:.1f}%) device={device_id}")
@@ -404,6 +558,9 @@ def health():
         "model_path": MODEL_PATH,
         "model_loaded": model_loaded,
         "capture_pending": _capture_requested,
+        "gatekeeper_enabled": LLM_GATEKEEPER_ENABLED and bool(os.environ.get("OPENAI_API_KEY")),
+        "gatekeeper_model": LLM_GATEKEEPER_MODEL,
+        "blur_threshold": BLUR_THRESHOLD,
     })
 
 
