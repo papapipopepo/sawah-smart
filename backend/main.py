@@ -34,10 +34,10 @@ MODEL_PATH = os.environ.get("MODEL_PATH", "/app/models/best_hybrid_cnn_ExG.keras
 CNN_IMG_SIZE = 224
 CLASS_ORDER = ["Vegetative", "Generative", "Mature"]
 
-# Validasi gambar (3-lapis: blur + LLM gatekeeper)
-# Laplacian variance; foto < ini = buram. Set 0 untuk MATIKAN blur check (andalkan LLM).
-# OV3660 kualitas rendah → skor bisa ~3-10, jadi default dibuat rendah.
-BLUR_THRESHOLD = float(os.environ.get("BLUR_THRESHOLD", "10"))
+# Validasi gambar: LLM gatekeeper (is_rice + is_clear). Laplacian = pre-filter opsional.
+# Default 0 = Laplacian MATI (andalkan LLM untuk deteksi blur). Set >0 utk aktifkan.
+# OV3660 kualitas rendah → Laplacian tidak reliable, jadi LLM lebih baik.
+BLUR_THRESHOLD = float(os.environ.get("BLUR_THRESHOLD", "0"))
 LLM_GATEKEEPER_MODEL = os.environ.get("LLM_GATEKEEPER_MODEL", "gpt-4o-mini")
 LLM_GATEKEEPER_ENABLED = os.environ.get("LLM_GATEKEEPER_ENABLED", "true").lower() == "true"
 
@@ -220,13 +220,25 @@ def blur_score(rgb):
     return float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
 
+def detect_mime(image_data):
+    """Deteksi mime dari magic bytes (penting agar OpenAI vision tidak error)."""
+    if image_data[:8].startswith(b"\x89PNG"):
+        return "image/png"
+    if image_data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if image_data[:4] == b"RIFF" and image_data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"  # fallback
+
+
 @lf_observe("llm-gatekeeper")
 def llm_gatekeeper(image_data):
-    """LLM cek apakah gambar = tanaman padi. Return dict.
+    """LLM cek: (1) apakah padi, (2) apakah cukup jelas (tidak buram/gelap).
 
-    Kalau OPENAI_API_KEY tidak ada / error → fail-open (anggap padi, enabled=False).
+    Return {enabled, is_rice, is_clear, reason, tokens}.
+    Kalau OPENAI_API_KEY tidak ada / error → fail-open (enabled=False, loloskan).
     """
-    result = {"enabled": False, "is_rice": True, "reason": "", "tokens": 0}
+    result = {"enabled": False, "is_rice": True, "is_clear": True, "reason": "", "tokens": 0}
 
     if not LLM_GATEKEEPER_ENABLED:
         result["reason"] = "gatekeeper disabled"
@@ -241,34 +253,40 @@ def llm_gatekeeper(image_data):
         import json
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
+        mime = detect_mime(image_data)
         b64 = base64.b64encode(image_data).decode("utf-8")
 
         system = (
-            "Kamu ahli agronomi padi. Tentukan apakah gambar menampilkan TANAMAN PADI "
-            "(sawah, daun padi, malai, atau bulir padi) atau BUKAN padi "
-            "(orang, hewan, objek, tanaman lain, ruangan, dll). "
+            "Kamu ahli agronomi padi. Analisis gambar lalu tentukan DUA hal:\n"
+            "1. is_rice: apakah ini TANAMAN PADI (sawah, daun padi, malai, bulir padi)? "
+            "false kalau orang/hewan/kendaraan/objek/tanaman lain/ruangan/dll.\n"
+            "2. is_clear: apakah kualitas gambar CUKUP JELAS untuk dianalisis? "
+            "false kalau terlalu buram, gelap, blur berat, atau tidak bisa dikenali.\n"
             "Balas HANYA JSON: "
-            '{"is_rice": true|false, "reason": "penjelasan visual singkat"}'
+            '{"is_rice": true|false, "is_clear": true|false, "reason": "penjelasan singkat"}'
         )
         resp = client.chat.completions.create(
             model=LLM_GATEKEEPER_MODEL,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": [
-                    {"type": "text", "text": "Apakah gambar ini tanaman padi?"},
+                    {"type": "text", "text": "Apakah ini tanaman padi & cukup jelas?"},
                     {"type": "image_url", "image_url": {
-                        "url": f"data:image/jpeg;base64,{b64}"}},
+                        "url": f"data:{mime};base64,{b64}"}},
                 ]},
             ],
             response_format={"type": "json_object"},
-            max_tokens=150,
+            max_tokens=200,
             temperature=0.0,
         )
         parsed = json.loads(resp.choices[0].message.content)
         result["enabled"] = True
         result["is_rice"] = bool(parsed.get("is_rice", True))
+        result["is_clear"] = bool(parsed.get("is_clear", True))
         result["reason"] = str(parsed.get("reason", ""))
         result["tokens"] = resp.usage.total_tokens if resp.usage else 0
+        print(f"[GATEKEEPER] mime={mime} is_rice={result['is_rice']} "
+              f"is_clear={result['is_clear']} — {result['reason']}")
     except Exception as e:
         # Fail-open: kalau LLM error, jangan blokir prediksi
         result["reason"] = f"gatekeeper error (fail-open): {e}"
@@ -293,12 +311,16 @@ def validate_image(rgb, image_data):
         print(f"[VALIDATE] REJECT blur — score={bscore:.1f} < {BLUR_THRESHOLD}")
         return False, "blur", info
 
-    # Lapis 2: LLM gatekeeper (padi/bukan)
+    # Lapis 2: LLM gatekeeper (padi/bukan + jelas/buram)
     gate = llm_gatekeeper(image_data)
     info["llm_check"] = gate
-    if gate.get("enabled") and not gate.get("is_rice", True):
-        print(f"[VALIDATE] REJECT not_rice — {gate.get('reason')}")
-        return False, "not_rice", info
+    if gate.get("enabled"):
+        if not gate.get("is_rice", True):
+            print(f"[VALIDATE] REJECT not_rice — {gate.get('reason')}")
+            return False, "not_rice", info
+        if not gate.get("is_clear", True):
+            print(f"[VALIDATE] REJECT blur (LLM) — {gate.get('reason')}")
+            return False, "blur", info
 
     return True, None, info
 
