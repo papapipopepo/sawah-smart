@@ -35,7 +35,9 @@ CNN_IMG_SIZE = 224
 CLASS_ORDER = ["Vegetative", "Generative", "Mature"]
 
 # Validasi gambar (3-lapis: blur + LLM gatekeeper)
-BLUR_THRESHOLD = float(os.environ.get("BLUR_THRESHOLD", "100"))  # Laplacian variance; < ini = buram
+# Laplacian variance; foto < ini = buram. Set 0 untuk MATIKAN blur check (andalkan LLM).
+# OV3660 kualitas rendah → skor bisa ~3-10, jadi default dibuat rendah.
+BLUR_THRESHOLD = float(os.environ.get("BLUR_THRESHOLD", "10"))
 LLM_GATEKEEPER_MODEL = os.environ.get("LLM_GATEKEEPER_MODEL", "gpt-4o-mini")
 LLM_GATEKEEPER_ENABLED = os.environ.get("LLM_GATEKEEPER_ENABLED", "true").lower() == "true"
 
@@ -283,11 +285,11 @@ def validate_image(rgb, image_data):
     """
     info = {}
 
-    # Lapis 1: blur (murah, jalan duluan)
+    # Lapis 1: blur (murah, jalan duluan). Skip kalau threshold <= 0.
     bscore = blur_score(rgb)
     info["blur_score"] = round(bscore, 2)
     info["blur_threshold"] = BLUR_THRESHOLD
-    if bscore < BLUR_THRESHOLD:
+    if BLUR_THRESHOLD > 0 and bscore < BLUR_THRESHOLD:
         print(f"[VALIDATE] REJECT blur — score={bscore:.1f} < {BLUR_THRESHOLD}")
         return False, "blur", info
 
@@ -413,7 +415,7 @@ def list_images():
 
         images = []
         for blob in blobs:
-            if not blob.name.endswith(".jpg"):
+            if not blob.name.lower().endswith((".jpg", ".jpeg", ".png")):
                 continue
             meta = blob.metadata or {}
             images.append({
