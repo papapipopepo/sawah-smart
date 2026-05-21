@@ -2437,12 +2437,14 @@ async function uploadManualImage(file) {
   }
 
   const crUrl = (localStorage.getItem('cloud_run_url') || CLOUD_RUN_URL).replace(/\/$/, '');
-  const filename = 'manual_' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const filename = 'manual_' + Date.now() + '_' + safeName;
 
-  showToast('info','⏳','Menganalisis...','Upload + CNN inference. Mohon tunggu (~3-10 detik).');
+  showToast('info','⏳','Mengupload...','Foto sedang diupload ke galeri.');
 
   try {
-    const resp = await fetch(crUrl + '/predict', {
+    // Upload ke galeri saja (tanpa analisis). Analisis dilakukan via tombol 🔬.
+    const resp = await fetch(crUrl + '/upload', {
       method: 'POST',
       headers: {
         'Content-Type': 'image/jpeg',
@@ -2450,47 +2452,16 @@ async function uploadManualImage(file) {
         'X-Device-ID': 'manual-upload'
       },
       body: file,
-      signal: AbortSignal.timeout(60000)
+      signal: AbortSignal.timeout(30000)
     });
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({error: 'HTTP ' + resp.status}));
       throw new Error(err.error || ('HTTP ' + resp.status));
     }
-    const data = await resp.json();
 
-    // Cek hasil validasi (blur / bukan padi) — tidak disimpan ke history
-    if (data.status === 'rejected') {
-      handleRejected(data);
-      return;
-    }
-
-    const pred = data.prediction;
-
-    // Simpan ke Firebase /detections
-    const labelId = pred.label === 'Mature' ? 'siap' : 'belum';
-    await db.ref('/detections').push({
-      filename: data.filename,
-      timestamp: Date.now(),
-      device_id: 'manual-upload',
-      label: pred.label,
-      label_id: labelId,
-      confidence: Math.round(pred.confidence * 100),
-      probabilities: pred.probabilities,
-      vi_name: pred.vi_name,
-      vi_stats: pred.vi_stats,
-      green_fraction: pred.green_fraction,
-      exg_heatmap_b64: pred.exg_heatmap_b64,
-      notes: `Hasil CNN Hybrid + ExG: ${pred.label} (${Math.round(pred.confidence*100)}% konfiden)`
-    });
-
-    const labelText = pred.label === 'Mature' ? 'Matang (Siap Panen)'
-                    : pred.label === 'Generative' ? 'Generatif'
-                    : 'Vegetatif';
-    showToast('ok','✅','Deteksi Selesai', `${labelText} — ${Math.round(pred.confidence*100)}% konfiden`);
-
+    showToast('ok','✅','Foto Terupload','Klik tombol 🔬 pada foto untuk analisis CNN.');
     loadImageGallery();
-    loadDetectionResults();
   } catch(e) {
     showToast('warn','⚠️','Upload Gagal', e.message || 'Tidak bisa terhubung ke backend.');
   } finally {
