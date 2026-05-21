@@ -7,6 +7,9 @@ opencv-python-headless==4.10.0.84
 scikit-image==0.24.0
 matplotlib==3.9.2
 openai==1.54.3
+# httpx <0.28 — httpx 0.28 hapus arg 'proxies' yg masih dipakai openai 1.54.x
+# (gejala: "Client.__init__() got an unexpected keyword argument 'proxies'")
+httpx==0.27.2
 # Langfuse v2 (BUKAN v3) — v3 pakai OpenTelemetry yg butuh protobuf>=5,
 # konflik dgn tensorflow-cpu (butuh protobuf<5). v2 tidak pakai OTel jadi aman.
 # Kode lf_observe() support v2 via fallback `from langfuse.decorators import observe`.
