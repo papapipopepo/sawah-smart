@@ -2415,10 +2415,13 @@ function handleRejected(data) {
   const reason = data.reject_reason;
   const v = data.validation || {};
   if (reason === 'blur') {
+    const raw = (v.llm_check?.reason || '').replace(/[.\s]+$/, '');
+    const detail = raw ? ' — ' + raw : (v.blur_score != null ? ` (skor ketajaman ${v.blur_score})` : '');
     showToast('warn','📷','Foto Buram',
-      `Kualitas foto kurang tajam (skor ${v.blur_score ?? '?'}). Ambil ulang: jaga kamera stabil, jarak 15-30cm, pencahayaan cukup.`);
+      `Kualitas foto kurang baik${detail}. Ambil ulang: jaga kamera stabil, jarak 15-30cm, pencahayaan cukup.`);
   } else if (reason === 'not_rice') {
-    const why = v.llm_check?.reason ? ' — ' + v.llm_check.reason : '';
+    const raw = (v.llm_check?.reason || '').replace(/[.\s]+$/, '');
+    const why = raw ? ' — ' + raw : '';
     showToast('warn','🚫','Bukan Tanaman Padi',
       `Gambar terdeteksi bukan padi${why}. Tidak disimpan ke hasil deteksi.`);
   } else {
