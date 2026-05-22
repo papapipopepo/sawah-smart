@@ -61,9 +61,9 @@ MODEL_REGISTRY = {
     "gemini-2.5-pro":   {"provider": "gemini", "model": "gemini-2.5-pro",     "label": "Gemini 2.5 Pro (gratis)"},
 }
 
-# Model default untuk gatekeeper saat klasifikasi pakai CNN (LLM gratis)
-GATEKEEPER_MODEL = os.environ.get("GATEKEEPER_MODEL", "gemini-2.0-flash")
-DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-2.0-flash")
+# Model default. gemini-2.0-flash sudah TIDAK gratis (limit 0), pakai 2.5-flash.
+GATEKEEPER_MODEL = os.environ.get("GATEKEEPER_MODEL", "gemini-2.5-flash")
+DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-2.5-flash")
 
 storage_client = storage.Client()
 
@@ -328,8 +328,8 @@ def llm_classify(image_data, model_id):
             "'Generative' (malai muncul, bulir berkembang, mulai menguning), "
             "'Mature' (kuning keemasan, malai menunduk, SIAP PANEN). null kalau is_rice=false.\n"
             "4. probabilities: estimasi peluang tiap fase (jumlah ~1.0).\n"
-            "5. alasan: penjelasan visual singkat. 6. rekomendasi: saran untuk petani.\n"
-            "Balas HANYA JSON: "
+            "5. alasan: SANGAT SINGKAT maks 1 kalimat. 6. rekomendasi: SANGAT SINGKAT maks 1 kalimat.\n"
+            "Balas HANYA JSON valid & ringkas: "
             '{"is_rice":true,"is_clear":true,"kelas":"Vegetative|Generative|Mature|null",'
             '"probabilities":{"Vegetative":0.0,"Generative":0.0,"Mature":0.0},'
             '"alasan":"...","rekomendasi":"..."}'
@@ -344,10 +344,16 @@ def llm_classify(image_data, model_id):
                 ]},
             ],
             response_format={"type": "json_object"},
-            max_tokens=400,
+            max_tokens=800,
             temperature=0.1,
         )
-        parsed = json.loads(resp.choices[0].message.content)
+        raw = resp.choices[0].message.content or "{}"
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            # Salvage JSON yang terpotong: ambil sampai '}' terakhir
+            cut = raw.rfind("}")
+            parsed = json.loads(raw[:cut + 1]) if cut > 0 else {}
         result["enabled"] = True
         result["is_rice"] = bool(parsed.get("is_rice", True))
         result["is_clear"] = bool(parsed.get("is_clear", True))
