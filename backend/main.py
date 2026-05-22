@@ -255,6 +255,16 @@ def detect_mime(image_data):
     return "image/jpeg"  # fallback
 
 
+def _openai_class():
+    """Pakai langfuse.openai (auto-track model/token/cost) kalau ada, else openai biasa."""
+    try:
+        from langfuse.openai import OpenAI as _LFOpenAI  # auto-instrumented
+        return _LFOpenAI
+    except Exception:
+        from openai import OpenAI as _OpenAI
+        return _OpenAI
+
+
 def get_llm_client(model_id):
     """Return (client, api_model_name) untuk model_id, atau (None, None) kalau tak tersedia."""
     reg = MODEL_REGISTRY.get(model_id)
@@ -264,7 +274,7 @@ def get_llm_client(model_id):
     api_key = os.environ.get(prov["key_env"])
     if not api_key:
         return None, None
-    from openai import OpenAI
+    OpenAI = _openai_class()
     if prov["base_url"]:
         client = OpenAI(api_key=api_key, base_url=prov["base_url"])
     else:
