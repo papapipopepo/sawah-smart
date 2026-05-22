@@ -2278,7 +2278,7 @@ async function loadModels() {
     }
     localStorage.setItem('detect_model', sel.value);
   } catch(e) {
-    sel.innerHTML = '<option value="gemini-2.0-flash">Gemini 2.0 Flash (gratis)</option>';
+    sel.innerHTML = '<option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option>';
   }
 }
 
@@ -2288,7 +2288,7 @@ function saveModelChoice() {
 }
 
 function currentModel() {
-  return localStorage.getItem('detect_model') || 'gemini-2.0-flash';
+  return localStorage.getItem('detect_model') || 'gemini-2.5-flash-lite';
 }
 
 async function loadImageGallery() {

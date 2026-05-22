@@ -52,18 +52,18 @@ PROVIDERS = {
 }
 
 MODEL_REGISTRY = {
-    # model_id (dipakai web/header)   provider    api_model               label tampil
-    "cnn-hybrid":       {"provider": "local",  "model": None,                 "label": "CNN Hybrid (lokal)"},
-    "gpt-4o":           {"provider": "openai", "model": "gpt-4o",             "label": "GPT-4o"},
-    "gpt-4o-mini":      {"provider": "openai", "model": "gpt-4o-mini",        "label": "GPT-4o-mini"},
-    "gemini-2.0-flash": {"provider": "gemini", "model": "gemini-2.0-flash",   "label": "Gemini 2.0 Flash (gratis)"},
-    "gemini-2.5-flash": {"provider": "gemini", "model": "gemini-2.5-flash",   "label": "Gemini 2.5 Flash (gratis)"},
-    "gemini-2.5-pro":   {"provider": "gemini", "model": "gemini-2.5-pro",     "label": "Gemini 2.5 Pro (gratis)"},
+    # model_id (web/header)            provider    api_model                  label tampil
+    "cnn-hybrid":            {"provider": "local",  "model": None,                    "label": "CNN Hybrid (lokal)"},
+    "gpt-4o":                {"provider": "openai", "model": "gpt-4o",                "label": "GPT-4o"},
+    "gpt-4o-mini":           {"provider": "openai", "model": "gpt-4o-mini",           "label": "GPT-4o-mini"},
+    "gemini-2.5-flash-lite": {"provider": "gemini", "model": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash-Lite"},
+    "gemini-2.5-flash":      {"provider": "gemini", "model": "gemini-2.5-flash",      "label": "Gemini 2.5 Flash"},
+    "gemini-2.5-pro":        {"provider": "gemini", "model": "gemini-2.5-pro",        "label": "Gemini 2.5 Pro"},
 }
 
-# Model default. gemini-2.0-flash sudah TIDAK gratis (limit 0), pakai 2.5-flash.
-GATEKEEPER_MODEL = os.environ.get("GATEKEEPER_MODEL", "gemini-2.5-flash")
-DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-2.5-flash")
+# gemini-2.0-flash dihapus: 404 "no longer available to new users".
+GATEKEEPER_MODEL = os.environ.get("GATEKEEPER_MODEL", "gemini-2.5-flash-lite")
+DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-2.5-flash-lite")
 
 storage_client = storage.Client()
 
@@ -344,7 +344,7 @@ def llm_classify(image_data, model_id):
                 ]},
             ],
             response_format={"type": "json_object"},
-            max_tokens=800,
+            max_tokens=1500,  # tinggi: thinking model (2.5 Pro) butuh budget lebih
             temperature=0.1,
         )
         raw = resp.choices[0].message.content or "{}"
@@ -433,9 +433,13 @@ def run_detection(rgb, image_data, model_id):
         info["llm_check"]["reason"] = res.get("reason", "")
         return {"status": "rejected", "reject_reason": "blur", "validation": info}
 
-    label = res.get("label") or "Unknown"
-    probs = res.get("probabilities", {})
-    conf = probs.get(label, max(probs.values()) if probs else 0.0)
+    probs = res.get("probabilities", {}) or {}
+    label = res.get("label")
+    # Fallback: kalau label kosong tapi ada probabilitas, ambil yang tertinggi
+    if (not label or label == "Unknown") and probs:
+        label = max(probs, key=probs.get)
+    label = label or "Unknown"
+    conf = probs.get(label, 0.0)
     viz = exg_visualization(rgb)
     pred = {
         "label": label,
