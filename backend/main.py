@@ -70,7 +70,7 @@ storage_client = storage.Client()
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Filename, X-Device-ID",
+    "Access-Control-Allow-Headers": "Content-Type, X-Filename, X-Device-ID, X-Model",
 }
 
 
