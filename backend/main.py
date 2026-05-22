@@ -255,6 +255,20 @@ def detect_mime(image_data):
     return "image/jpeg"  # fallback
 
 
+def downscale_for_llm(image_data, max_dim=1024, quality=85):
+    """Perkecil gambar sebelum kirim ke LLM — hemat token & lebih cepat.
+    Selalu re-encode JPEG (mime jadi pasti image/jpeg)."""
+    from PIL import Image
+    img = Image.open(io.BytesIO(image_data)).convert("RGB")
+    w, h = img.size
+    if max(w, h) > max_dim:
+        s = max_dim / max(w, h)
+        img = img.resize((int(w * s), int(h * s)), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=quality)
+    return buf.getvalue()
+
+
 def _openai_class():
     """Pakai langfuse.openai (auto-track model/token/cost) kalau ada, else openai biasa."""
     try:
@@ -300,8 +314,10 @@ def llm_classify(image_data, model_id):
 
     try:
         import json
-        mime = detect_mime(image_data)
-        b64 = base64.b64encode(image_data).decode("utf-8")
+        # Perkecil gambar → hemat token (hindari limit) + lebih cepat
+        small = downscale_for_llm(image_data)
+        mime = "image/jpeg"
+        b64 = base64.b64encode(small).decode("utf-8")
 
         system = (
             "Kamu ahli agronomi padi. Analisis gambar lalu kembalikan:\n"
@@ -344,7 +360,12 @@ def llm_classify(image_data, model_id):
         print(f"[LLM:{model_id}] mime={mime} is_rice={result['is_rice']} "
               f"is_clear={result['is_clear']} label={result['label']}")
     except Exception as e:
-        result["reason"] = f"LLM error: {e}"
+        msg = str(e)
+        if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+            result["reason"] = (f"Kuota model {model_id} habis (rate limit). "
+                                "Coba model lain (GPT-4o / Gemini lain) atau tunggu sebentar.")
+        else:
+            result["reason"] = f"LLM error: {msg[:200]}"
         print(f"[LLM:{model_id}] error: {e}")
 
     return result
