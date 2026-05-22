@@ -1,21 +1,23 @@
 """
-Cloud Run service: upload_padi + predict
+Cloud Run service: upload_padi + multi-model detect
 - POST   /upload                  : Terima JPEG dari ESP32-CAM, simpan ke GCS
-- POST   /predict                 : Validasi (blur+LLM) → upload → inferensi CNN Hybrid + ExG
-- POST   /predict-existing/<name> : Validasi + inferensi foto yang sudah ada di GCS
-- GET    /images                  : List gambar terbaru dari GCS (JSON)
-- GET    /image/<name>            : Serve gambar dari GCS (proxy)
-- DELETE /image/<name>            : Hapus gambar dari GCS
+- POST   /predict                 : Deteksi + upload (model via header X-Model)
+- POST   /predict-existing/<name> : Deteksi foto yang sudah ada di GCS (X-Model)
+- GET    /models                  : Daftar model tersedia (CNN/OpenAI/Gemini)
+- GET    /images                  : List gambar terbaru dari GCS
+- GET    /image/<name>            : Serve gambar (GET) / hapus (DELETE)
 - GET    /health                  : Health check
 
-Validasi 3-lapis sebelum inferensi:
-  1. Blur check (Laplacian variance < BLUR_THRESHOLD → reject 'blur')
-  2. LLM gatekeeper (GPT-4o-mini: padi/bukan → reject 'not_rice')
-  3. CNN Hybrid + ExG → klasifikasi fase
+Alur deteksi (run_detection):
+  1. Blur pre-filter Laplacian (opsional, BLUR_THRESHOLD; default 0 = mati)
+  2. Klasifikasi via model terpilih:
+     - LLM (GPT-4o/Gemini): 1 panggilan = gatekeeper (is_rice/is_clear) + fase
+     - CNN Hybrid (lokal): gatekeeper LLM gratis dulu, lalu CNN klasifikasi fase
+  3. ExG heatmap + green fraction selalu dihitung (numpy/matplotlib)
 
-Env vars: GCS_BUCKET_NAME, MODEL_PATH, OPENAI_API_KEY (untuk gatekeeper),
-  BLUR_THRESHOLD (default 100), LLM_GATEKEEPER_MODEL (default gpt-4o-mini),
-  LLM_GATEKEEPER_ENABLED (default true), LANGFUSE_* (opsional, tracking)
+Env vars: GCS_BUCKET_NAME, MODEL_PATH, OPENAI_API_KEY (GPT), GEMINI_API_KEY (Gemini),
+  DEFAULT_MODEL (default gemini-2.0-flash), GATEKEEPER_MODEL, BLUR_THRESHOLD,
+  LANGFUSE_* (opsional, tracking)
 """
 
 import os
@@ -36,10 +38,32 @@ CLASS_ORDER = ["Vegetative", "Generative", "Mature"]
 
 # Validasi gambar: LLM gatekeeper (is_rice + is_clear). Laplacian = pre-filter opsional.
 # Default 0 = Laplacian MATI (andalkan LLM untuk deteksi blur). Set >0 utk aktifkan.
-# OV3660 kualitas rendah → Laplacian tidak reliable, jadi LLM lebih baik.
 BLUR_THRESHOLD = float(os.environ.get("BLUR_THRESHOLD", "0"))
-LLM_GATEKEEPER_MODEL = os.environ.get("LLM_GATEKEEPER_MODEL", "gpt-4o-mini")
-LLM_GATEKEEPER_ENABLED = os.environ.get("LLM_GATEKEEPER_ENABLED", "true").lower() == "true"
+
+# ============================================================
+# Registry model — selector di web kirim model_id via header X-Model
+# Provider LLM pakai endpoint OpenAI-compatible (1 code path).
+# ============================================================
+PROVIDERS = {
+    "openai": {"base_url": None,
+               "key_env": "OPENAI_API_KEY"},
+    "gemini": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+               "key_env": "GEMINI_API_KEY"},
+}
+
+MODEL_REGISTRY = {
+    # model_id (dipakai web/header)   provider    api_model               label tampil
+    "cnn-hybrid":       {"provider": "local",  "model": None,                 "label": "CNN Hybrid (lokal)"},
+    "gpt-4o":           {"provider": "openai", "model": "gpt-4o",             "label": "GPT-4o"},
+    "gpt-4o-mini":      {"provider": "openai", "model": "gpt-4o-mini",        "label": "GPT-4o-mini"},
+    "gemini-2.0-flash": {"provider": "gemini", "model": "gemini-2.0-flash",   "label": "Gemini 2.0 Flash (gratis)"},
+    "gemini-2.5-flash": {"provider": "gemini", "model": "gemini-2.5-flash",   "label": "Gemini 2.5 Flash (gratis)"},
+    "gemini-2.5-pro":   {"provider": "gemini", "model": "gemini-2.5-pro",     "label": "Gemini 2.5 Pro (gratis)"},
+}
+
+# Model default untuk gatekeeper saat klasifikasi pakai CNN (LLM gratis)
+GATEKEEPER_MODEL = os.environ.get("GATEKEEPER_MODEL", "gemini-2.0-flash")
+DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-2.0-flash")
 
 storage_client = storage.Client()
 
@@ -231,98 +255,162 @@ def detect_mime(image_data):
     return "image/jpeg"  # fallback
 
 
-@lf_observe("llm-gatekeeper")
-def llm_gatekeeper(image_data):
-    """LLM cek: (1) apakah padi, (2) apakah cukup jelas (tidak buram/gelap).
-
-    Return {enabled, is_rice, is_clear, reason, tokens}.
-    Kalau OPENAI_API_KEY tidak ada / error → fail-open (enabled=False, loloskan).
-    """
-    result = {"enabled": False, "is_rice": True, "is_clear": True, "reason": "", "tokens": 0}
-
-    if not LLM_GATEKEEPER_ENABLED:
-        result["reason"] = "gatekeeper disabled"
-        return result
-
-    api_key = os.environ.get("OPENAI_API_KEY")
+def get_llm_client(model_id):
+    """Return (client, api_model_name) untuk model_id, atau (None, None) kalau tak tersedia."""
+    reg = MODEL_REGISTRY.get(model_id)
+    if not reg or reg["provider"] == "local":
+        return None, None
+    prov = PROVIDERS[reg["provider"]]
+    api_key = os.environ.get(prov["key_env"])
     if not api_key:
-        result["reason"] = "OPENAI_API_KEY not set"
+        return None, None
+    from openai import OpenAI
+    if prov["base_url"]:
+        client = OpenAI(api_key=api_key, base_url=prov["base_url"])
+    else:
+        client = OpenAI(api_key=api_key)
+    return client, reg["model"]
+
+
+@lf_observe("llm-classify")
+def llm_classify(image_data, model_id):
+    """LLM: gatekeeper (is_rice, is_clear) + klasifikasi fase + probabilitas + alasan.
+
+    Return {enabled, is_rice, is_clear, label, probabilities, reason, recommendation, tokens, model}.
+    Kalau key tidak ada / error → enabled=False (fail-open).
+    """
+    result = {"enabled": False, "is_rice": True, "is_clear": True,
+              "label": None, "probabilities": {}, "reason": "", "recommendation": "",
+              "tokens": 0, "model": model_id}
+
+    client, api_model = get_llm_client(model_id)
+    if client is None:
+        result["reason"] = f"model {model_id} tidak tersedia (API key belum di-set)"
         return result
 
     try:
         import json
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
         mime = detect_mime(image_data)
         b64 = base64.b64encode(image_data).decode("utf-8")
 
         system = (
-            "Kamu ahli agronomi padi. Analisis gambar lalu tentukan DUA hal:\n"
-            "1. is_rice: apakah ini TANAMAN PADI (sawah, daun padi, malai, bulir padi)? "
-            "false kalau orang/hewan/kendaraan/objek/tanaman lain/ruangan/dll.\n"
-            "2. is_clear: apakah kualitas gambar CUKUP JELAS untuk dianalisis? "
-            "false kalau terlalu buram, gelap, blur berat, atau tidak bisa dikenali.\n"
+            "Kamu ahli agronomi padi. Analisis gambar lalu kembalikan:\n"
+            "1. is_rice: TANAMAN PADI (sawah/daun padi/malai/bulir)? false kalau "
+            "orang/hewan/kendaraan/objek/tanaman lain/ruangan.\n"
+            "2. is_clear: kualitas cukup jelas? false kalau buram/gelap berat.\n"
+            "3. kelas: fase padi — 'Vegetative' (daun hijau, belum ada malai), "
+            "'Generative' (malai muncul, bulir berkembang, mulai menguning), "
+            "'Mature' (kuning keemasan, malai menunduk, SIAP PANEN). null kalau is_rice=false.\n"
+            "4. probabilities: estimasi peluang tiap fase (jumlah ~1.0).\n"
+            "5. alasan: penjelasan visual singkat. 6. rekomendasi: saran untuk petani.\n"
             "Balas HANYA JSON: "
-            '{"is_rice": true|false, "is_clear": true|false, "reason": "penjelasan singkat"}'
+            '{"is_rice":true,"is_clear":true,"kelas":"Vegetative|Generative|Mature|null",'
+            '"probabilities":{"Vegetative":0.0,"Generative":0.0,"Mature":0.0},'
+            '"alasan":"...","rekomendasi":"..."}'
         )
         resp = client.chat.completions.create(
-            model=LLM_GATEKEEPER_MODEL,
+            model=api_model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": [
-                    {"type": "text", "text": "Apakah ini tanaman padi & cukup jelas?"},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:{mime};base64,{b64}"}},
+                    {"type": "text", "text": "Klasifikasikan fase padi pada gambar ini."},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
                 ]},
             ],
             response_format={"type": "json_object"},
-            max_tokens=200,
-            temperature=0.0,
+            max_tokens=400,
+            temperature=0.1,
         )
         parsed = json.loads(resp.choices[0].message.content)
         result["enabled"] = True
         result["is_rice"] = bool(parsed.get("is_rice", True))
         result["is_clear"] = bool(parsed.get("is_clear", True))
-        result["reason"] = str(parsed.get("reason", ""))
+        result["label"] = parsed.get("kelas") or None
+        probs = parsed.get("probabilities", {}) or {}
+        result["probabilities"] = {c: float(probs.get(c, 0) or 0) for c in CLASS_ORDER}
+        result["reason"] = str(parsed.get("alasan", ""))
+        result["recommendation"] = str(parsed.get("rekomendasi", ""))
         result["tokens"] = resp.usage.total_tokens if resp.usage else 0
-        print(f"[GATEKEEPER] mime={mime} is_rice={result['is_rice']} "
-              f"is_clear={result['is_clear']} — {result['reason']}")
+        print(f"[LLM:{model_id}] mime={mime} is_rice={result['is_rice']} "
+              f"is_clear={result['is_clear']} label={result['label']}")
     except Exception as e:
-        # Fail-open: kalau LLM error, jangan blokir prediksi
-        result["reason"] = f"gatekeeper error (fail-open): {e}"
-        print(f"[GATEKEEPER] error: {e}")
+        result["reason"] = f"LLM error: {e}"
+        print(f"[LLM:{model_id}] error: {e}")
 
     return result
 
 
-def validate_image(rgb, image_data):
-    """Pipeline validasi: (1) blur check, (2) LLM gatekeeper.
+def exg_visualization(rgb):
+    """Hitung ExG: green_fraction, stats, heatmap base64 (dipakai CNN & LLM)."""
+    exg_map = compute_ExG(rgb)
+    mask = green_mask(rgb)
+    return {
+        "vi_name": "ExG",
+        "vi_stats": extract_vi_stats(exg_map.flatten()),
+        "green_fraction": float(mask.mean()),
+        "exg_heatmap_b64": render_exg_heatmap_b64(exg_map, mask),
+    }
 
-    Return (ok: bool, reject_reason: str|None, info: dict)
-    reject_reason: 'blur' | 'not_rice' | None
+
+def run_detection(rgb, image_data, model_id):
+    """Pipeline: blur pre-filter → gatekeeper LLM → klasifikasi (CNN/LLM).
+
+    Return dict: {status:'ok'|'rejected', reject_reason?, validation?, prediction?}
     """
-    info = {}
+    if model_id not in MODEL_REGISTRY:
+        model_id = DEFAULT_MODEL
+    info = {"model": model_id}
 
-    # Lapis 1: blur (murah, jalan duluan). Skip kalau threshold <= 0.
+    # Lapis 1: blur Laplacian (opsional, default mati)
     bscore = blur_score(rgb)
     info["blur_score"] = round(bscore, 2)
-    info["blur_threshold"] = BLUR_THRESHOLD
     if BLUR_THRESHOLD > 0 and bscore < BLUR_THRESHOLD:
-        print(f"[VALIDATE] REJECT blur — score={bscore:.1f} < {BLUR_THRESHOLD}")
-        return False, "blur", info
+        return {"status": "rejected", "reject_reason": "blur", "validation": info}
 
-    # Lapis 2: LLM gatekeeper (padi/bukan + jelas/buram)
-    gate = llm_gatekeeper(image_data)
-    info["llm_check"] = gate
-    if gate.get("enabled"):
-        if not gate.get("is_rice", True):
-            print(f"[VALIDATE] REJECT not_rice — {gate.get('reason')}")
-            return False, "not_rice", info
-        if not gate.get("is_clear", True):
-            print(f"[VALIDATE] REJECT blur (LLM) — {gate.get('reason')}")
-            return False, "blur", info
+    is_local = MODEL_REGISTRY[model_id]["provider"] == "local"
 
-    return True, None, info
+    if is_local:
+        # CNN: gatekeeper pakai LLM gratis dulu, lalu CNN klasifikasi fase
+        gate = llm_classify(image_data, GATEKEEPER_MODEL)
+        info["llm_check"] = gate
+        if gate.get("enabled"):
+            if not gate.get("is_rice", True):
+                return {"status": "rejected", "reject_reason": "not_rice", "validation": info}
+            if not gate.get("is_clear", True):
+                return {"status": "rejected", "reject_reason": "blur", "validation": info}
+        pred = predict_hybrid_cnn(rgb)
+        pred["engine"] = MODEL_REGISTRY[model_id]["label"]
+        pred["validation"] = info
+        return {"status": "ok", "prediction": pred}
+
+    # LLM: satu panggilan gatekeeper + klasifikasi
+    res = llm_classify(image_data, model_id)
+    info["llm_check"] = {k: res[k] for k in ("enabled", "is_rice", "is_clear", "model", "tokens")}
+    if not res.get("enabled"):
+        return {"status": "error", "error": res.get("reason", "LLM tidak tersedia"),
+                "validation": info}
+    if not res.get("is_rice", True):
+        info["llm_check"]["reason"] = res.get("reason", "")
+        return {"status": "rejected", "reject_reason": "not_rice", "validation": info}
+    if not res.get("is_clear", True):
+        info["llm_check"]["reason"] = res.get("reason", "")
+        return {"status": "rejected", "reject_reason": "blur", "validation": info}
+
+    label = res.get("label") or "Unknown"
+    probs = res.get("probabilities", {})
+    conf = probs.get(label, max(probs.values()) if probs else 0.0)
+    viz = exg_visualization(rgb)
+    pred = {
+        "label": label,
+        "confidence": float(conf),
+        "probabilities": probs,
+        "engine": MODEL_REGISTRY[model_id]["label"],
+        "notes": res.get("reason", ""),
+        "recommendation": res.get("recommendation", ""),
+        "validation": info,
+        **viz,
+    }
+    return {"status": "ok", "prediction": pred}
 
 
 # ============================================================
@@ -378,24 +466,21 @@ def predict():
 
     filename = request.headers.get("X-Filename")
     device_id = request.headers.get("X-Device-ID", "manual")
+    model_id = request.headers.get("X-Model", DEFAULT_MODEL)
 
     if not filename:
         ts = datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")
         filename = f"padi_{device_id}_{ts}.jpg"
 
     try:
-        # 1. Decode + validasi 3-lapis (blur → LLM gatekeeper) SEBELUM upload
+        # 1. Decode + deteksi (validasi + klasifikasi) SEBELUM upload
         rgb = decode_jpeg_to_rgb(image_data)
-        ok, reject_reason, vinfo = validate_image(rgb, image_data)
-        if not ok:
-            return cors({
-                "status": "rejected",
-                "filename": filename,
-                "reject_reason": reject_reason,   # 'blur' | 'not_rice'
-                "validation": vinfo,
-            }, 200)
+        result = run_detection(rgb, image_data, model_id)
+        if result["status"] != "ok":
+            result["filename"] = filename
+            return cors(result, 200)
 
-        # 2. Lolos validasi → upload ke GCS
+        # 2. Lolos → upload ke GCS
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
         blob = bucket.blob(f"uploads/{filename}")
         blob.upload_from_string(image_data, content_type="image/jpeg")
@@ -403,13 +488,9 @@ def predict():
         blob.patch()
 
         gcs_path = f"gs://{GCS_BUCKET_NAME}/uploads/{filename}"
-
-        # 3. Inferensi CNN
-        prediction = predict_hybrid_cnn(rgb)
-        prediction["validation"] = vinfo
-
+        prediction = result["prediction"]
         print(f"[PREDICT] {filename}: {prediction['label']} "
-              f"({prediction['confidence']*100:.1f}%) from {device_id}")
+              f"({prediction['confidence']*100:.1f}%) [{model_id}] from {device_id}")
 
         return cors({
             "status": "ok",
@@ -507,32 +588,18 @@ def predict_existing(filename):
         image_data = blob.download_as_bytes()
         blob.reload()
         device_id = (blob.metadata or {}).get("device_id", "unknown")
+        model_id = request.headers.get("X-Model", DEFAULT_MODEL)
 
-        # Decode + validasi 3-lapis (blur → LLM gatekeeper)
+        # Decode + deteksi (validasi + klasifikasi sesuai model terpilih)
         rgb = decode_jpeg_to_rgb(image_data)
-        ok, reject_reason, vinfo = validate_image(rgb, image_data)
-        if not ok:
-            return cors({
-                "status": "rejected",
-                "filename": filename,
-                "device_id": device_id,
-                "reject_reason": reject_reason,
-                "validation": vinfo,
-            }, 200)
+        result = run_detection(rgb, image_data, model_id)
+        result["filename"] = filename
+        result["device_id"] = device_id
 
-        # Lolos → inferensi
-        prediction = predict_hybrid_cnn(rgb)
-        prediction["validation"] = vinfo
-
-        print(f"[PREDICT-EXISTING] {filename}: {prediction['label']} "
-              f"({prediction['confidence']*100:.1f}%) device={device_id}")
-
-        return cors({
-            "status": "ok",
-            "filename": filename,
-            "device_id": device_id,
-            "prediction": prediction,
-        }, 200)
+        if result["status"] == "ok":
+            print(f"[PREDICT-EXISTING] {filename}: {result['prediction']['label']} "
+                  f"[{model_id}] device={device_id}")
+        return cors(result, 200)
 
     except Exception as e:
         import traceback
@@ -571,20 +638,39 @@ def capture_request():
     return cors({"capture": was_requested, "ts": _capture_request_ts})
 
 
+def available_models():
+    """Daftar model yang bisa dipakai (key provider tersedia)."""
+    out = []
+    for mid, reg in MODEL_REGISTRY.items():
+        if reg["provider"] == "local":
+            ok = os.path.exists(MODEL_PATH)
+        else:
+            ok = bool(os.environ.get(PROVIDERS[reg["provider"]]["key_env"]))
+        out.append({"id": mid, "label": reg["label"],
+                    "provider": reg["provider"], "available": ok})
+    return out
+
+
+@app.route("/models", methods=["GET", "OPTIONS"])
+def models():
+    if request.method == "OPTIONS":
+        return cors({}, 204)
+    return cors({"models": available_models(), "default": DEFAULT_MODEL})
+
+
 @app.route("/health", methods=["GET", "OPTIONS"])
 def health():
     if request.method == "OPTIONS":
         return cors({}, 204)
-    model_loaded = _MODEL is not None
     return cors({
         "status": "ok",
         "bucket": GCS_BUCKET_NAME,
-        "model_path": MODEL_PATH,
-        "model_loaded": model_loaded,
+        "model_loaded": _MODEL is not None,
         "capture_pending": _capture_requested,
-        "gatekeeper_enabled": LLM_GATEKEEPER_ENABLED and bool(os.environ.get("OPENAI_API_KEY")),
-        "gatekeeper_model": LLM_GATEKEEPER_MODEL,
         "blur_threshold": BLUR_THRESHOLD,
+        "default_model": DEFAULT_MODEL,
+        "gatekeeper_model": GATEKEEPER_MODEL,
+        "models": available_models(),
     })
 
 
