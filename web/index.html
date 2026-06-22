@@ -1236,7 +1236,6 @@ input, select, textarea { font-family: var(--font); }
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button onclick="loadImageGallery()" class="settings-btn secondary">🔄 Refresh</button>
-              <button onclick="triggerCapture()" class="settings-btn" id="btn-capture">📸 Ambil Foto</button>
               <button onclick="document.getElementById('manual-upload-input').click()" class="settings-btn">📤 Upload Manual</button>
               <input type="file" id="manual-upload-input" accept="image/jpeg,image/jpg,image/png" style="display:none;" onchange="uploadManualImage(this.files[0])">
             </div>
@@ -1274,7 +1273,7 @@ input, select, textarea { font-family: var(--font); }
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
             <div>
               <div style="font-size:0.875rem;font-weight:700;color:var(--grey-900);">Hasil Deteksi Kesiapan Panen</div>
-              <div style="font-size:0.775rem;color:var(--grey-500);margin-top:2px;">Analisis AI (CNN Hybrid + ExG) dari foto tanaman</div>
+              <div style="font-size:0.775rem;color:var(--grey-500);margin-top:2px;">Analisis Hybrid EffNetB0 + ExGR (atau VLM gatekeeper) dari foto tanaman</div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button onclick="loadDetectionResults()" class="settings-btn secondary">🔄 Refresh</button>
@@ -1594,7 +1593,7 @@ function initApp() {
   if (editCard) editCard.style.display = currentUser.isGuest ? 'none' : 'block';
 
   // Kontrol pompa disable untuk guest
-  ['btn-pompa-on','btn-pompa-off','btn-capture'].forEach(id => {
+  ['btn-pompa-on','btn-pompa-off'].forEach(id => {
     const el = document.getElementById(id);
     if (el) { el.disabled = currentUser.isGuest; el.style.opacity = currentUser.isGuest ? '0.5' : '1'; }
   });
@@ -2325,7 +2324,7 @@ async function loadImageGallery() {
             <div class="fmeta">${ts} · ${img.device_id||'unknown'}</div>
           </div>
         </div>
-        <button class="gallery-analyze-btn" title="Analisis CNN + ExG"
+        <button class="gallery-analyze-btn" title="Analisis Hybrid + ExGR (atau VLM)"
           onclick="event.stopPropagation(); analyzePhoto('${safeFname}','${safeDev}')">🔬</button>
         <button class="gallery-del-btn" title="Hapus foto"
           onclick="event.stopPropagation(); deletePhoto('${safeFname}')">🗑</button>
@@ -2346,28 +2345,6 @@ function showImageDetail(url, filename, ts, deviceId) {
   document.getElementById('img-modal').classList.add('active');
 }
 function closeImgModal(e) { if (e.target === document.getElementById('img-modal')) document.getElementById('img-modal').classList.remove('active'); }
-
-async function triggerCapture() {
-  if (currentUser && currentUser.isGuest) { showToast('warn','⚠️','Mode Demo','Tidak tersedia di mode demo.'); return; }
-  showToast('info','📸','Memicu Capture...','Perintah dikirim ke ESP32-CAM');
-  const crUrl = (localStorage.getItem('cloud_run_url') || CLOUD_RUN_URL).replace(/\/$/, '');
-  try {
-    // Kirim ke Cloud Run /capture-request (ESP32 polling endpoint ini)
-    const resp = await fetch(crUrl + '/capture-request', {
-      method: 'POST',
-      signal: AbortSignal.timeout(8000)
-    });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-
-    // Juga set flag di Firebase /kontrol/capture untuk kompatibilitas
-    try { await db.ref('/kontrol/capture').set({ trigger: true, ts: Date.now() }); } catch(_) {}
-
-    showToast('ok','✅','Perintah Terkirim','ESP32-CAM akan mengambil foto dalam ~5-10 detik.');
-    setTimeout(loadImageGallery, 12000);
-  } catch(e) {
-    showToast('warn','⚠️','Gagal','Tidak bisa kirim perintah capture: ' + e.message);
-  }
-}
 
 async function loadDetectionResults() {
   const loading = document.getElementById('detection-loading');
@@ -2432,12 +2409,12 @@ async function loadDetectionResults() {
           ${imgUrl ? `<img class="detection-thumb" src="${imgUrl}" alt="foto" style="cursor:pointer;"
             onclick="showImageDetail('${imgUrl}','${safeFname2}','${safeTs2}','${safeDev2}')"
             onerror="this.style.background='var(--grey-200)'">` : ''}
-          ${heatmapImg ? `<img class="detection-heatmap" src="data:image/png;base64,${d.exg_heatmap_b64}" alt="ExG heatmap" title="Klik untuk lihat besar" style="cursor:pointer;"
-            onclick="showImageDetail('data:image/png;base64,${d.exg_heatmap_b64}','ExG Heatmap — ${safeFname2}','${safeTs2}','')">` : ''}
+          ${heatmapImg ? `<img class="detection-heatmap" src="data:image/png;base64,${d.exg_heatmap_b64}" alt="ExGR heatmap" title="Klik untuk lihat besar" style="cursor:pointer;"
+            onclick="showImageDetail('data:image/png;base64,${d.exg_heatmap_b64}','ExGR Heatmap — ${safeFname2}','${safeTs2}','')">` : ''}
         </div>
         <div class="detection-body">
           <strong>${d.filename || 'Analisis ' + d.id}</strong>
-          <p>${d.notes || 'Klasifikasi fase padi menggunakan CNN Hybrid + Indeks Vegetasi ExG.'}</p>
+          <p>${d.notes || 'Klasifikasi fase padi menggunakan Hybrid EffNetB0 + Indeks Vegetasi ExGR.'}</p>
           <div class="det-badges">
             <span class="det-badge ${labelCls}">${labelBadge}</span>
             ${d.confidence ? `<span class="det-badge proses">${Math.round(d.confidence)}% konfiden</span>` : ''}
@@ -2462,22 +2439,17 @@ async function loadDetectionResults() {
 function handleRejected(data) {
   const reason = data.reject_reason;
   const v = data.validation || {};
-  if (reason === 'blur') {
-    const raw = (v.llm_check?.reason || '').replace(/[.\s]+$/, '');
-    const detail = raw ? ' — ' + raw : (v.blur_score != null ? ` (skor ketajaman ${v.blur_score})` : '');
-    showToast('warn','📷','Foto Buram',
-      `Kualitas foto kurang baik${detail}. Ambil ulang: jaga kamera stabil, jarak 15-30cm, pencahayaan cukup.`);
-  } else if (reason === 'not_rice') {
+  if (reason === 'not_rice') {
     const raw = (v.llm_check?.reason || '').replace(/[.\s]+$/, '');
     const why = raw ? ' — ' + raw : '';
     showToast('warn','🚫','Bukan Tanaman Padi',
-      `Gambar terdeteksi bukan padi${why}. Tidak disimpan ke hasil deteksi.`);
+      `Gatekeeper menolak: gambar bukan padi${why}. Tidak disimpan ke hasil deteksi.`);
   } else {
-    showToast('warn','⚠️','Foto Ditolak','Foto tidak lolos validasi.');
+    showToast('warn','⚠️','Foto Ditolak','Foto tidak lolos gatekeeper VLM.');
   }
 }
 
-// ==================== UPLOAD MANUAL → /predict (CNN Hybrid + ExG) ====================
+// ==================== UPLOAD MANUAL → /predict (Hybrid EffNetB0 + ExGR) ====================
 async function uploadManualImage(file) {
   if (!file) return;
   const input = document.getElementById('manual-upload-input');
@@ -2511,7 +2483,7 @@ async function uploadManualImage(file) {
       throw new Error(err.error || ('HTTP ' + resp.status));
     }
 
-    showToast('ok','✅','Foto Terupload','Klik tombol 🔬 pada foto untuk analisis CNN.');
+    showToast('ok','✅','Foto Terupload','Klik tombol 🔬 pada foto untuk analisis Hybrid/SVM/VLM.');
     loadImageGallery();
   } catch(e) {
     showToast('warn','⚠️','Upload Gagal', e.message || 'Tidak bisa terhubung ke backend.');
@@ -2562,7 +2534,7 @@ async function analyzePhoto(filename, deviceId) {
       label_id: labelId,
       confidence: Math.round((pred.confidence || 0) * 100),
       probabilities: pred.probabilities || {},
-      vi_name: pred.vi_name || 'ExG',
+      vi_name: pred.vi_name || 'ExGR',
       vi_stats: pred.vi_stats || {},
       green_fraction: pred.green_fraction,
       exg_heatmap_b64: pred.exg_heatmap_b64,

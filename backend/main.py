@@ -1,29 +1,36 @@
 """
 Cloud Run service: upload_padi + multi-model detect
+
+Arsitektur 2-tier sesuai tesis SawahSmart:
+  Tier 1 (gatekeeper) : VLM open-world reject (is_rice only)
+  Tier 2 (classifier) : Hybrid EffNetB0+ExGR (default), SVM-RBF+ExGR, atau VLM zero-shot
+
+Endpoints:
 - POST   /upload                  : Terima JPEG dari ESP32-CAM, simpan ke GCS
 - POST   /predict                 : Deteksi + upload (model via header X-Model)
 - POST   /predict-existing/<name> : Deteksi foto yang sudah ada di GCS (X-Model)
-- GET    /models                  : Daftar model tersedia (CNN/OpenAI/Gemini)
+- GET    /models                  : Daftar model tersedia (Hybrid/SVM/VLM)
 - GET    /images                  : List gambar terbaru dari GCS
 - GET    /image/<name>            : Serve gambar (GET) / hapus (DELETE)
 - GET    /health                  : Health check
 
 Alur deteksi (run_detection):
-  1. Blur pre-filter Laplacian (opsional, BLUR_THRESHOLD; default 0 = mati)
+  1. Gatekeeper VLM: cek is_rice. Reject kalau bukan padi.
   2. Klasifikasi via model terpilih:
-     - LLM (GPT-4o/Gemini): 1 panggilan = gatekeeper (is_rice/is_clear) + fase
-     - CNN Hybrid (lokal): gatekeeper LLM gratis dulu, lalu CNN klasifikasi fase
-  3. ExG heatmap + green fraction selalu dihitung (numpy/matplotlib)
+     - VLM (GPT-4o/4o-mini, Gemini 2.5 Flash/Flash-Lite): gatekeeper + fase 1 call
+     - Hybrid EffNetB0+ExGR (lokal): VLM gatekeeper dulu, lalu Hybrid klasifikasi
+     - SVM-RBF+ExGR (lokal): VLM gatekeeper dulu, lalu SVM klasifikasi
+  3. ExGR heatmap + green fraction selalu dihitung (numpy/matplotlib)
 
-Env vars: GCS_BUCKET_NAME, MODEL_PATH, OPENAI_API_KEY (GPT), GEMINI_API_KEY (Gemini),
-  DEFAULT_MODEL (default gemini-2.0-flash), GATEKEEPER_MODEL, BLUR_THRESHOLD,
-  LANGFUSE_* (opsional, tracking)
+Env vars: GCS_BUCKET_NAME, HYBRID_MODEL_PATH, SVM_MODEL_PATH, LABEL_ENCODER_PATH,
+  OPENAI_API_KEY, GEMINI_API_KEY, DEFAULT_MODEL, GATEKEEPER_MODEL, LANGFUSE_*
 """
 
 import os
 import io
 import base64
 import datetime
+import time
 
 import numpy as np
 from flask import Flask, request, jsonify, Response
@@ -32,17 +39,20 @@ from google.cloud import storage
 app = Flask(__name__)
 
 GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "padi-images-thesis-496412")
-MODEL_PATH = os.environ.get("MODEL_PATH", "/app/models/best_hybrid_cnn_ExG.keras")
+HYBRID_MODEL_PATH = os.environ.get("HYBRID_MODEL_PATH",
+                                   "/app/models/best_dl_Hybrid_ExGR.keras")
+SVM_MODEL_PATH = os.environ.get("SVM_MODEL_PATH",
+                                "/app/models/best_3class_ExGR_SVM_RBF.joblib")
+LABEL_ENCODER_PATH = os.environ.get("LABEL_ENCODER_PATH",
+                                    "/app/models/label_encoder_3class.joblib")
 CNN_IMG_SIZE = 224
 CLASS_ORDER = ["Vegetative", "Generative", "Mature"]
 
-# Validasi gambar: LLM gatekeeper (is_rice + is_clear). Laplacian = pre-filter opsional.
-# Default 0 = Laplacian MATI (andalkan LLM untuk deteksi blur). Set >0 utk aktifkan.
-BLUR_THRESHOLD = float(os.environ.get("BLUR_THRESHOLD", "0"))
-
 # ============================================================
-# Registry model — selector di web kirim model_id via header X-Model
-# Provider LLM pakai endpoint OpenAI-compatible (1 code path).
+# Registry model — selector di web kirim model_id via header X-Model.
+# Cohort sesuai tesis SawahSmart (Bab 4 snapshot 2026-06-21):
+#   2 supervised lokal (Hybrid + SVM) + 4 VLM endpoint (Pro dihapus).
+# Provider VLM pakai endpoint OpenAI-compatible (1 code path).
 # ============================================================
 PROVIDERS = {
     "openai": {"base_url": None,
@@ -53,19 +63,41 @@ PROVIDERS = {
 
 MODEL_REGISTRY = {
     # model_id (web/header)            provider    api_model                  label tampil
-    "cnn-hybrid":            {"provider": "local",  "model": None,                    "label": "CNN Hybrid (lokal)"},
-    "gpt-4o":                {"provider": "openai", "model": "gpt-4o",                "label": "GPT-4o"},
-    "gpt-4o-mini":           {"provider": "openai", "model": "gpt-4o-mini",           "label": "GPT-4o-mini"},
+    "hybrid-effnetb0-exgr":  {"provider": "local",  "model": None,                    "label": "Hybrid EffNetB0 + ExGR"},
+    "svm-rbf-exgr":          {"provider": "local",  "model": None,                    "label": "ML SVM-RBF + ExGR"},
     "gemini-2.5-flash-lite": {"provider": "gemini", "model": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash-Lite"},
     "gemini-2.5-flash":      {"provider": "gemini", "model": "gemini-2.5-flash",      "label": "Gemini 2.5 Flash"},
-    "gemini-2.5-pro":        {"provider": "gemini", "model": "gemini-2.5-pro",        "label": "Gemini 2.5 Pro"},
+    "gpt-4o":                {"provider": "openai", "model": "gpt-4o",                "label": "GPT-4o"},
+    "gpt-4o-mini":           {"provider": "openai", "model": "gpt-4o-mini",           "label": "GPT-4o-mini"},
 }
 
-# gemini-2.0-flash dihapus: 404 "no longer available to new users".
+# Path lokal per model_id (untuk available_models check & loading).
+LOCAL_MODEL_PATH = {
+    "hybrid-effnetb0-exgr": HYBRID_MODEL_PATH,
+    "svm-rbf-exgr":         SVM_MODEL_PATH,
+}
+
 GATEKEEPER_MODEL = os.environ.get("GATEKEEPER_MODEL", "gemini-2.5-flash-lite")
-DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-2.5-flash-lite")
+DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "hybrid-effnetb0-exgr")
 
 storage_client = storage.Client()
+
+
+# ============================================================
+# Latency instrumentation — print prefix [LATENCY] biar mudah di-grep dari
+# Cloud Run log (gcloud logging read). Stage = nama checkpoint, t0 = mulai
+# (untuk hitung elapsed). Return waktu sekarang (epoch ms) supaya bisa dipakai
+# sebagai t0 untuk stage berikutnya.
+# ============================================================
+def log_latency(stage, t0=None, **extra):
+    now_ms = int(time.time() * 1000)
+    parts = [f"stage={stage}", f"t_ms={now_ms}"]
+    if t0 is not None:
+        parts.append(f"elapsed_ms={now_ms - t0}")
+    for k, v in extra.items():
+        parts.append(f"{k}={v}")
+    print("[LATENCY] " + " ".join(parts), flush=True)
+    return now_ms
 
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -88,26 +120,40 @@ def cors(data, status=200, mimetype=None):
 # ============================================================
 # Model loading (lazy, sekali di proses)
 # ============================================================
-_MODEL = None
+_HYBRID_MODEL = None
+_SVM_MODEL = None
+_LABEL_ENCODER = None
 
 
-def get_model():
-    global _MODEL
-    if _MODEL is None:
+def get_hybrid_model():
+    global _HYBRID_MODEL
+    if _HYBRID_MODEL is None:
         import tensorflow as tf
-        print(f"[MODEL] Loading {MODEL_PATH}...")
-        _MODEL = tf.keras.models.load_model(MODEL_PATH)
-        print(f"[MODEL] Loaded. Inputs: {len(_MODEL.inputs)}")
-    return _MODEL
+        print(f"[MODEL] Loading Hybrid {HYBRID_MODEL_PATH}...")
+        _HYBRID_MODEL = tf.keras.models.load_model(HYBRID_MODEL_PATH)
+        print(f"[MODEL] Hybrid loaded. Inputs: {len(_HYBRID_MODEL.inputs)}")
+    return _HYBRID_MODEL
+
+
+def get_svm_model():
+    global _SVM_MODEL, _LABEL_ENCODER
+    if _SVM_MODEL is None:
+        import joblib
+        print(f"[MODEL] Loading SVM {SVM_MODEL_PATH}...")
+        _SVM_MODEL = joblib.load(SVM_MODEL_PATH)
+        _LABEL_ENCODER = joblib.load(LABEL_ENCODER_PATH)
+        print(f"[MODEL] SVM + label encoder loaded.")
+    return _SVM_MODEL, _LABEL_ENCODER
 
 
 # ============================================================
-# VI / preprocessing helpers (port dari ml/app.py)
+# VI / preprocessing helpers (port dari ml/eval_bench.py).
+# ExGR = (2G - R - B) - (1.4R - G), sesuai feature engineering thesis.
 # ============================================================
-def compute_ExG(rgb):
-    r = rgb.astype(np.float32)
+def compute_ExGR(rgb):
+    r = rgb.astype(np.float32) / 255.0
     R, G, B = r[:, :, 0], r[:, :, 1], r[:, :, 2]
-    return (2 * G - R - B) / 255.0
+    return (2 * G - R - B) - (1.4 * R - G)
 
 
 def green_mask(rgb, threshold=5, min_green=40):
@@ -147,18 +193,18 @@ def extract_glcm_feats(rgb):
     return feats
 
 
-def render_exg_heatmap_b64(exg_map, mask):
-    """Render ExG heatmap pakai matplotlib 'Greens' cmap → PNG base64."""
+def render_exgr_heatmap_b64(vi_map, mask):
+    """Render ExGR heatmap pakai matplotlib 'Greens' cmap → PNG base64."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    masked = exg_map.astype(float).copy()
+    masked = vi_map.astype(float).copy()
     masked[~mask] = np.nan
 
     fig, ax = plt.subplots(figsize=(6, 4.5), dpi=90)
     im = ax.imshow(masked, cmap="Greens")
-    ax.set_title("Indeks Vegetasi ExG", fontsize=11, fontweight="bold")
+    ax.set_title("Indeks Vegetasi ExGR", fontsize=11, fontweight="bold")
     ax.axis("off")
     plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     plt.tight_layout()
@@ -177,8 +223,18 @@ def decode_jpeg_to_rgb(image_data):
     return np.array(img)
 
 
+def _extract_exgr_features(rgb):
+    """Hitung VI 18-dim (10 ExGR stats + 8 GLCM) untuk Hybrid & SVM."""
+    vi_map = compute_ExGR(rgb)
+    mask = green_mask(rgb)
+    stats = extract_vi_stats(vi_map.flatten())
+    glcm_feats = extract_glcm_feats(rgb)
+    vi_vec = np.array([list(stats.values()) + glcm_feats], dtype=np.float32)
+    return vi_vec, vi_map, mask, stats
+
+
 def predict_hybrid_cnn(rgb):
-    """Inferensi Hybrid CNN+ExG. Return dict prediction lengkap."""
+    """Inferensi Hybrid EffNetB0 + ExGR (18 VI features). Return dict prediction lengkap."""
     import cv2
     from tensorflow.keras.applications.efficientnet import preprocess_input
 
@@ -187,15 +243,11 @@ def predict_hybrid_cnn(rgb):
     img_in = preprocess_input(img.astype(np.float32))
     img_in = np.expand_dims(img_in, axis=0)
 
-    # Branch 2: VI features (1, 18) = 10 ExG stats + 8 GLCM
-    exg_map = compute_ExG(rgb)
-    mask = green_mask(rgb)
-    stats = extract_vi_stats(exg_map.flatten())
-    glcm_feats = extract_glcm_feats(rgb)
-    vi_vec = np.array([list(stats.values()) + glcm_feats], dtype=np.float32)
+    # Branch 2: VI features (1, 18) = 10 ExGR stats + 8 GLCM
+    vi_vec, vi_map, mask, stats = _extract_exgr_features(rgb)
 
     # Inference
-    model = get_model()
+    model = get_hybrid_model()
     proba = model.predict([img_in, vi_vec], verbose=0)[0]
     pred_id = int(np.argmax(proba))
     label = CLASS_ORDER[pred_id]
@@ -204,15 +256,53 @@ def predict_hybrid_cnn(rgb):
         "label": label,
         "confidence": float(proba[pred_id]),
         "probabilities": {c: float(p) for c, p in zip(CLASS_ORDER, proba.tolist())},
-        "vi_name": "ExG",
+        "vi_name": "ExGR",
         "vi_stats": stats,
         "green_fraction": float(mask.mean()),
-        "exg_heatmap_b64": render_exg_heatmap_b64(exg_map, mask),
+        "exg_heatmap_b64": render_exgr_heatmap_b64(vi_map, mask),
+    }
+
+
+def predict_svm_rbf(rgb):
+    """Inferensi ML SVM-RBF + ExGR (18 VI features). Return dict prediction lengkap."""
+    vi_vec, vi_map, mask, stats = _extract_exgr_features(rgb)
+
+    clf, label_encoder = get_svm_model()
+    y_pred_idx = clf.predict(vi_vec)[0]
+    # Decode via label encoder (joblib disimpan dengan urutan training).
+    if hasattr(label_encoder, "inverse_transform"):
+        label = str(label_encoder.inverse_transform([y_pred_idx])[0])
+    else:
+        label = CLASS_ORDER[int(y_pred_idx)]
+
+    # SVM bisa expose probabilities kalau dilatih dengan probability=True.
+    if hasattr(clf, "predict_proba"):
+        proba = clf.predict_proba(vi_vec)[0]
+        # Map index → class name via label encoder kalau ada
+        if hasattr(label_encoder, "inverse_transform"):
+            cls_names = [str(label_encoder.inverse_transform([i])[0])
+                         for i in range(len(proba))]
+        else:
+            cls_names = CLASS_ORDER[:len(proba)]
+        prob_dict = {c: float(p) for c, p in zip(cls_names, proba.tolist())}
+        confidence = float(proba.max())
+    else:
+        prob_dict = {label: 1.0}
+        confidence = 1.0
+
+    return {
+        "label": label,
+        "confidence": confidence,
+        "probabilities": prob_dict,
+        "vi_name": "ExGR",
+        "vi_stats": stats,
+        "green_fraction": float(mask.mean()),
+        "exg_heatmap_b64": render_exgr_heatmap_b64(vi_map, mask),
     }
 
 
 # ============================================================
-# Validasi gambar 3-lapis: blur → LLM gatekeeper
+# Gatekeeper VLM: open-world reject (is_rice only). Tier 1 dari arsitektur 2-tier.
 # ============================================================
 
 # Langfuse opsional (graceful) — dukung v3 (from langfuse) & v2 (langfuse.decorators)
@@ -235,13 +325,6 @@ def lf_observe(name):
         except Exception:
             return fn
     return deco
-
-
-def blur_score(rgb):
-    """Variance of Laplacian — ukuran ketajaman. Rendah = buram."""
-    import cv2
-    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    return float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
 
 def detect_mime(image_data):
@@ -298,12 +381,12 @@ def get_llm_client(model_id):
 
 @lf_observe("llm-classify")
 def llm_classify(image_data, model_id):
-    """LLM: gatekeeper (is_rice, is_clear) + klasifikasi fase + probabilitas + alasan.
+    """VLM call: gatekeeper (is_rice) + klasifikasi fase + probabilitas + alasan.
 
-    Return {enabled, is_rice, is_clear, label, probabilities, reason, recommendation, tokens, model}.
+    Return {enabled, is_rice, label, probabilities, reason, recommendation, tokens, model}.
     Kalau key tidak ada / error → enabled=False (fail-open).
     """
-    result = {"enabled": False, "is_rice": True, "is_clear": True,
+    result = {"enabled": False, "is_rice": True,
               "label": None, "probabilities": {}, "reason": "", "recommendation": "",
               "tokens": 0, "model": model_id}
 
@@ -323,14 +406,13 @@ def llm_classify(image_data, model_id):
             "Kamu ahli agronomi padi. Analisis gambar lalu kembalikan:\n"
             "1. is_rice: TANAMAN PADI (sawah/daun padi/malai/bulir)? false kalau "
             "orang/hewan/kendaraan/objek/tanaman lain/ruangan.\n"
-            "2. is_clear: kualitas cukup jelas? false kalau buram/gelap berat.\n"
-            "3. kelas: fase padi — 'Vegetative' (daun hijau, belum ada malai), "
+            "2. kelas: fase padi — 'Vegetative' (daun hijau, belum ada malai), "
             "'Generative' (malai muncul, bulir berkembang, mulai menguning), "
             "'Mature' (kuning keemasan, malai menunduk, SIAP PANEN). null kalau is_rice=false.\n"
-            "4. probabilities: estimasi peluang tiap fase (jumlah ~1.0).\n"
-            "5. alasan: SANGAT SINGKAT maks 1 kalimat. 6. rekomendasi: SANGAT SINGKAT maks 1 kalimat.\n"
+            "3. probabilities: estimasi peluang tiap fase (jumlah ~1.0).\n"
+            "4. alasan: SANGAT SINGKAT maks 1 kalimat. 5. rekomendasi: SANGAT SINGKAT maks 1 kalimat.\n"
             "Balas HANYA JSON valid & ringkas: "
-            '{"is_rice":true,"is_clear":true,"kelas":"Vegetative|Generative|Mature|null",'
+            '{"is_rice":true,"kelas":"Vegetative|Generative|Mature|null",'
             '"probabilities":{"Vegetative":0.0,"Generative":0.0,"Mature":0.0},'
             '"alasan":"...","rekomendasi":"..."}'
         )
@@ -344,7 +426,7 @@ def llm_classify(image_data, model_id):
                 ]},
             ],
             response_format={"type": "json_object"},
-            max_tokens=1500,  # tinggi: thinking model (2.5 Pro) butuh budget lebih
+            max_tokens=800,
             temperature=0.1,
         )
         raw = resp.choices[0].message.content or "{}"
@@ -356,7 +438,6 @@ def llm_classify(image_data, model_id):
             parsed = json.loads(raw[:cut + 1]) if cut > 0 else {}
         result["enabled"] = True
         result["is_rice"] = bool(parsed.get("is_rice", True))
-        result["is_clear"] = bool(parsed.get("is_clear", True))
         result["label"] = parsed.get("kelas") or None
         probs = parsed.get("probabilities", {}) or {}
         result["probabilities"] = {c: float(probs.get(c, 0) or 0) for c in CLASS_ORDER}
@@ -364,7 +445,7 @@ def llm_classify(image_data, model_id):
         result["recommendation"] = str(parsed.get("rekomendasi", ""))
         result["tokens"] = resp.usage.total_tokens if resp.usage else 0
         print(f"[LLM:{model_id}] mime={mime} is_rice={result['is_rice']} "
-              f"is_clear={result['is_clear']} label={result['label']}")
+              f"label={result['label']}")
     except Exception as e:
         msg = str(e)
         if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
@@ -377,20 +458,27 @@ def llm_classify(image_data, model_id):
     return result
 
 
-def exg_visualization(rgb):
-    """Hitung ExG: green_fraction, stats, heatmap base64 (dipakai CNN & LLM)."""
-    exg_map = compute_ExG(rgb)
+def exgr_visualization(rgb):
+    """Hitung ExGR: green_fraction, stats, heatmap base64 (dipakai VLM classifier track)."""
+    vi_map = compute_ExGR(rgb)
     mask = green_mask(rgb)
     return {
-        "vi_name": "ExG",
-        "vi_stats": extract_vi_stats(exg_map.flatten()),
+        "vi_name": "ExGR",
+        "vi_stats": extract_vi_stats(vi_map.flatten()),
         "green_fraction": float(mask.mean()),
-        "exg_heatmap_b64": render_exg_heatmap_b64(exg_map, mask),
+        "exg_heatmap_b64": render_exgr_heatmap_b64(vi_map, mask),
     }
 
 
+# Local supervised dispatcher (model_id → predict fn).
+LOCAL_PREDICTORS = {
+    "hybrid-effnetb0-exgr": predict_hybrid_cnn,
+    "svm-rbf-exgr":         predict_svm_rbf,
+}
+
+
 def run_detection(rgb, image_data, model_id):
-    """Pipeline: blur pre-filter → gatekeeper LLM → klasifikasi (CNN/LLM).
+    """Pipeline 2-tier: VLM gatekeeper (is_rice) → klasifikasi (Hybrid/SVM/VLM).
 
     Return dict: {status:'ok'|'rejected', reject_reason?, validation?, prediction?}
     """
@@ -398,40 +486,29 @@ def run_detection(rgb, image_data, model_id):
         model_id = DEFAULT_MODEL
     info = {"model": model_id}
 
-    # Lapis 1: blur Laplacian (opsional, default mati)
-    bscore = blur_score(rgb)
-    info["blur_score"] = round(bscore, 2)
-    if BLUR_THRESHOLD > 0 and bscore < BLUR_THRESHOLD:
-        return {"status": "rejected", "reject_reason": "blur", "validation": info}
-
     is_local = MODEL_REGISTRY[model_id]["provider"] == "local"
 
     if is_local:
-        # CNN: gatekeeper pakai LLM gratis dulu, lalu CNN klasifikasi fase
+        # Tier 1: VLM gatekeeper (is_rice only). Tier 2: supervised lokal (Hybrid/SVM).
         gate = llm_classify(image_data, GATEKEEPER_MODEL)
         info["llm_check"] = gate
-        if gate.get("enabled"):
-            if not gate.get("is_rice", True):
-                return {"status": "rejected", "reject_reason": "not_rice", "validation": info}
-            if not gate.get("is_clear", True):
-                return {"status": "rejected", "reject_reason": "blur", "validation": info}
-        pred = predict_hybrid_cnn(rgb)
+        if gate.get("enabled") and not gate.get("is_rice", True):
+            return {"status": "rejected", "reject_reason": "not_rice", "validation": info}
+        predictor = LOCAL_PREDICTORS[model_id]
+        pred = predictor(rgb)
         pred["engine"] = MODEL_REGISTRY[model_id]["label"]
         pred["validation"] = info
         return {"status": "ok", "prediction": pred}
 
-    # LLM: satu panggilan gatekeeper + klasifikasi
+    # VLM track: satu panggilan gatekeeper + klasifikasi (zero-shot).
     res = llm_classify(image_data, model_id)
-    info["llm_check"] = {k: res[k] for k in ("enabled", "is_rice", "is_clear", "model", "tokens")}
+    info["llm_check"] = {k: res[k] for k in ("enabled", "is_rice", "model", "tokens")}
     if not res.get("enabled"):
         return {"status": "error", "error": res.get("reason", "LLM tidak tersedia"),
                 "validation": info}
     if not res.get("is_rice", True):
         info["llm_check"]["reason"] = res.get("reason", "")
         return {"status": "rejected", "reject_reason": "not_rice", "validation": info}
-    if not res.get("is_clear", True):
-        info["llm_check"]["reason"] = res.get("reason", "")
-        return {"status": "rejected", "reject_reason": "blur", "validation": info}
 
     probs = res.get("probabilities", {}) or {}
     label = res.get("label")
@@ -440,7 +517,7 @@ def run_detection(rgb, image_data, model_id):
         label = max(probs, key=probs.get)
     label = label or "Unknown"
     conf = probs.get(label, 0.0)
-    viz = exg_visualization(rgb)
+    viz = exgr_visualization(rgb)
     pred = {
         "label": label,
         "confidence": float(conf),
@@ -462,6 +539,8 @@ def upload_padi():
     if request.method == "OPTIONS":
         return cors({}, 204)
 
+    t_receive = log_latency("upload_receive", endpoint="/upload")
+
     image_data = request.get_data()
     if not image_data:
         return cors({"error": "No image data received"}, 400)
@@ -479,6 +558,8 @@ def upload_padi():
         blob.upload_from_string(image_data, content_type="image/jpeg")
         blob.metadata = {"device_id": device_id}
         blob.patch()
+        log_latency("upload_gcs_done", t0=t_receive,
+                    file=filename, bytes=len(image_data))
 
         gcs_path = f"gs://{GCS_BUCKET_NAME}/uploads/{filename}"
         print(f"[OK] Saved: {gcs_path} ({len(image_data)} bytes) from {device_id}")
@@ -497,9 +578,11 @@ def upload_padi():
 
 @app.route("/predict", methods=["POST", "OPTIONS"])
 def predict():
-    """Upload JPEG ke GCS + jalankan inferensi CNN + ExG heatmap."""
+    """Upload JPEG ke GCS + jalankan inferensi (Hybrid/SVM/VLM) + ExGR heatmap."""
     if request.method == "OPTIONS":
         return cors({}, 204)
+
+    t_receive = log_latency("predict_receive", endpoint="/predict")
 
     image_data = request.get_data()
     if not image_data:
@@ -516,7 +599,11 @@ def predict():
     try:
         # 1. Decode + deteksi (validasi + klasifikasi) SEBELUM upload
         rgb = decode_jpeg_to_rgb(image_data)
+        log_latency("predict_decode_done", t0=t_receive,
+                    file=filename, model=model_id)
         result = run_detection(rgb, image_data, model_id)
+        log_latency("predict_infer_done", t0=t_receive,
+                    file=filename, model=model_id, status=result["status"])
         if result["status"] != "ok":
             result["filename"] = filename
             return cors(result, 200)
@@ -527,6 +614,8 @@ def predict():
         blob.upload_from_string(image_data, content_type="image/jpeg")
         blob.metadata = {"device_id": device_id}
         blob.patch()
+        log_latency("predict_resp_ready", t0=t_receive,
+                    file=filename, model=model_id)
 
         gcs_path = f"gs://{GCS_BUCKET_NAME}/uploads/{filename}"
         prediction = result["prediction"]
@@ -614,9 +703,12 @@ def image_resource(filename):
 
 @app.route("/predict-existing/<filename>", methods=["POST", "OPTIONS"])
 def predict_existing(filename):
-    """Jalankan inferensi CNN pada foto yang sudah ada di GCS (tanpa re-upload)."""
+    """Jalankan inferensi (Hybrid/SVM/VLM) pada foto yang sudah ada di GCS (tanpa re-upload)."""
     if request.method == "OPTIONS":
         return cors({}, 204)
+
+    t_receive = log_latency("predict_existing_receive",
+                            endpoint="/predict-existing", file=filename)
 
     try:
         bucket = storage_client.bucket(GCS_BUCKET_NAME)
@@ -630,10 +722,16 @@ def predict_existing(filename):
         blob.reload()
         device_id = (blob.metadata or {}).get("device_id", "unknown")
         model_id = request.headers.get("X-Model", DEFAULT_MODEL)
+        log_latency("predict_existing_gcs_fetch", t0=t_receive,
+                    file=filename, model=model_id, bytes=len(image_data))
 
         # Decode + deteksi (validasi + klasifikasi sesuai model terpilih)
         rgb = decode_jpeg_to_rgb(image_data)
+        log_latency("predict_existing_decode_done", t0=t_receive,
+                    file=filename, model=model_id)
         result = run_detection(rgb, image_data, model_id)
+        log_latency("predict_existing_infer_done", t0=t_receive,
+                    file=filename, model=model_id, status=result["status"])
         result["filename"] = filename
         result["device_id"] = device_id
 
@@ -649,42 +747,14 @@ def predict_existing(filename):
         return cors({"error": str(e)}, 500)
 
 
-# ============================================================
-# Capture-on-demand flag (in-memory, ephemeral)
-# Web POST untuk request capture, ESP32 GET untuk consume (auto-clear)
-# ============================================================
-_capture_requested = False
-_capture_request_ts = 0
-
-
-@app.route("/capture-request", methods=["GET", "POST", "OPTIONS"])
-def capture_request():
-    global _capture_requested, _capture_request_ts
-
-    if request.method == "OPTIONS":
-        return cors({}, 204)
-
-    if request.method == "POST":
-        # Web request: set flag
-        _capture_requested = True
-        _capture_request_ts = int(datetime.datetime.utcnow().timestamp())
-        print(f"[CAPTURE] Request received at ts={_capture_request_ts}")
-        return cors({"status": "ok", "requested": True, "ts": _capture_request_ts}, 201)
-
-    # GET (ESP32 polling): return flag dan auto-clear kalau true
-    was_requested = _capture_requested
-    if was_requested:
-        _capture_requested = False
-        print(f"[CAPTURE] ESP32 picked up request (was set at ts={_capture_request_ts})")
-    return cors({"capture": was_requested, "ts": _capture_request_ts})
-
-
 def available_models():
-    """Daftar model yang bisa dipakai (key provider tersedia)."""
+    """Daftar model yang bisa dipakai (file lokal ada atau API key set)."""
     out = []
     for mid, reg in MODEL_REGISTRY.items():
         if reg["provider"] == "local":
-            ok = os.path.exists(MODEL_PATH)
+            ok = os.path.exists(LOCAL_MODEL_PATH.get(mid, ""))
+            if mid == "svm-rbf-exgr":
+                ok = ok and os.path.exists(LABEL_ENCODER_PATH)
         else:
             ok = bool(os.environ.get(PROVIDERS[reg["provider"]]["key_env"]))
         out.append({"id": mid, "label": reg["label"],
@@ -706,9 +776,8 @@ def health():
     return cors({
         "status": "ok",
         "bucket": GCS_BUCKET_NAME,
-        "model_loaded": _MODEL is not None,
-        "capture_pending": _capture_requested,
-        "blur_threshold": BLUR_THRESHOLD,
+        "hybrid_loaded": _HYBRID_MODEL is not None,
+        "svm_loaded": _SVM_MODEL is not None,
         "default_model": DEFAULT_MODEL,
         "gatekeeper_model": GATEKEEPER_MODEL,
         "models": available_models(),
