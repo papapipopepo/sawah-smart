@@ -915,12 +915,7 @@ input, select, textarea { font-family: var(--font); }
             <div class="stat-value" id="db-suhu">--<span class="stat-unit">°C</span></div>
             <div class="stat-status warn" id="db-suhu-status">⏳ Memuat...</div>
           </div>
-          <div class="stat-card hum">
-            <div class="stat-icon">💧</div>
-            <div class="stat-label">Kelembapan Udara</div>
-            <div class="stat-value" id="db-kelembapan">--<span class="stat-unit">%</span></div>
-            <div class="stat-status ok" id="db-kelembapan-status">⏳ Memuat...</div>
-          </div>
+
           <div class="stat-card soil">
             <div class="stat-icon">🌱</div>
             <div class="stat-label">Kelembapan Tanah</div>
@@ -1047,14 +1042,7 @@ input, select, textarea { font-family: var(--font); }
             <div style="font-family:var(--mono);font-size:2rem;font-weight:700;color:#f59e0b;" id="mon-cahaya">--<span style="font-size:0.9rem;color:var(--grey-500);"> lx</span></div>
             <div style="font-size:0.7rem;color:var(--grey-400);margin-top:4px;">Sensor: BH1750</div>
           </div>
-          <div class="card" style="padding:14px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <span style="font-size:0.8rem;font-weight:700;color:var(--grey-700);">💧 Kel. Udara</span>
-              <span class="fase-badge vegetatif" style="font-size:0.65rem;padding:2px 7px;">● LIVE</span>
-            </div>
-            <div style="font-family:var(--mono);font-size:2rem;font-weight:700;color:#06b6d4;" id="mon-kelembapan">--<span style="font-size:0.9rem;color:var(--grey-500);"> %</span></div>
-            <div style="font-size:0.7rem;color:var(--grey-400);margin-top:4px;">Sensor: DHT22</div>
-          </div>
+
         </div>
 
         <!-- Tabel nilai normal -->
@@ -1064,7 +1052,7 @@ input, select, textarea { font-family: var(--font); }
             <thead><tr><th>Parameter</th><th>Nilai Saat Ini</th><th>Rentang Normal</th><th>Status</th></tr></thead>
             <tbody>
               <tr><td>Suhu Udara</td><td class="mono" id="pt-suhu">-- °C</td><td class="mono">25 – 32 °C</td><td id="pt-suhu-s"><span class="stat-status warn" style="display:inline-flex">⏳</span></td></tr>
-              <tr><td>Kelembapan Udara</td><td class="mono" id="pt-kel">-- %</td><td class="mono">60 – 85 %</td><td id="pt-kel-s"><span class="stat-status warn" style="display:inline-flex">⏳</span></td></tr>
+
               <tr><td>Kelembapan Tanah</td><td class="mono" id="pt-tanah">-- %</td><td class="mono">50 – 80 %</td><td id="pt-tanah-s"><span class="stat-status warn" style="display:inline-flex">⏳</span></td></tr>
               <tr><td>Intensitas Cahaya</td><td class="mono" id="pt-cahaya">-- lux</td><td class="mono">2000 – 8000 lux</td><td id="pt-cahaya-s"><span class="stat-status warn" style="display:inline-flex">⏳</span></td></tr>
             </tbody>
@@ -1703,7 +1691,7 @@ db.ref('/sensor').on('value', (snap) => {
   updateStatCard('db-suhu',       'db-suhu-status',       d.suhu       ? d.suhu.toFixed(1)     : '--', '°C',  d.statusSuhu);
   updateStatCard('db-cahaya',     'db-cahaya-status',     d.cahaya     ? Math.round(d.cahaya)   : '--', ' lux', d.statusCahaya);
   updateStatCard('db-tanah',      'db-tanah-status',      d.tanahPersen !== undefined ? d.tanahPersen : '--', '%',  d.statusTanah);
-  updateStatCard('db-kelembapan', 'db-kelembapan-status', d.kelembapan ? d.kelembapan.toFixed(1): '--', '%',  'NRM');
+
 
   // Status pompa
   const pompaOn = d.pompa === true;
@@ -1714,7 +1702,7 @@ db.ref('/sensor').on('value', (snap) => {
   if (document.getElementById('mon-suhu'))       document.getElementById('mon-suhu').innerHTML       = (d.suhu ? d.suhu.toFixed(1) : '--') + '<span style="font-size:0.9rem;color:var(--grey-500);"> °C</span>';
   if (document.getElementById('mon-tanah'))      document.getElementById('mon-tanah').innerHTML      = (d.tanahPersen !== undefined ? d.tanahPersen : '--') + '<span style="font-size:0.9rem;color:var(--grey-500);"> %</span>';
   if (document.getElementById('mon-cahaya'))     document.getElementById('mon-cahaya').innerHTML     = (d.cahaya ? Math.round(d.cahaya) : '--') + '<span style="font-size:0.9rem;color:var(--grey-500);"> lx</span>';
-  if (document.getElementById('mon-kelembapan')) document.getElementById('mon-kelembapan').innerHTML = (d.kelembapan ? d.kelembapan.toFixed(1) : '--') + '<span style="font-size:0.9rem;color:var(--grey-500);"> %</span>';
+
 
   updateParamTable();
   updateHealthScore(d);
@@ -1751,12 +1739,11 @@ function recordSensorSnapshot(d) {
   // Hapus entri simulasi untuk slot yang sama (ganti dengan data real)
   data = data.filter(r => !(r.date === dateStr && r.time === slot && r.isSimulated));
 
-  const status = (d.suhu > 32) ? 'Panas' : (d.suhu < 26) ? 'Dingin' : (d.kelembapan < 50) ? 'Kering' : 'Normal';
+  const status = (d.suhu > 32) ? 'Panas' : (d.suhu < 26) ? 'Dingin' : 'Normal';
   data.push({
     date: dateStr,
     time: slot,
     suhu:   d.suhu     ? +d.suhu.toFixed(1)          : null,
-    kel:    d.kelembapan ? Math.round(d.kelembapan)   : null,
     cahaya: d.cahaya   ? Math.round(d.cahaya)         : null,
     tanah:  d.tanahPersen !== undefined ? d.tanahPersen : null,
     status,
@@ -1835,7 +1822,6 @@ function updateParamTable() {
   }
   const rows = [
     ['pt-suhu','pt-suhu-s',  d.suhu,         d.suhu ? d.suhu.toFixed(1)+'°C':'--', 25, 32],
-    ['pt-kel', 'pt-kel-s',   d.kelembapan,   d.kelembapan ? d.kelembapan.toFixed(1)+'%':'--', 60, 85],
     ['pt-tanah','pt-tanah-s',d.tanahPersen,  d.tanahPersen !== undefined ? d.tanahPersen+'%':'--', 50, 80],
     ['pt-cahaya','pt-cahaya-s',d.cahaya,     d.cahaya ? Math.round(d.cahaya)+' lux':'--', 2000, 8000],
   ];
@@ -1851,7 +1837,7 @@ function updateHealthScore(d) {
   let score = 100;
   if (d.suhu !== undefined) { if (d.suhu > 35 || d.suhu < 22) score -= 25; else if (d.suhu > 32 || d.suhu < 25) score -= 10; }
   if (d.tanahPersen !== undefined) { if (d.tanahPersen < 30 || d.tanahPersen > 90) score -= 30; else if (d.tanahPersen < 50 || d.tanahPersen > 80) score -= 10; }
-  if (d.kelembapan !== undefined) { if (d.kelembapan < 40 || d.kelembapan > 95) score -= 20; }
+
   if (d.cahaya !== undefined) { if (d.cahaya < 500) score -= 15; }
   score = Math.max(0, Math.min(100, score));
   const label = score >= 80 ? 'Sangat Baik' : score >= 60 ? 'Baik' : score >= 40 ? 'Cukup' : 'Kritis';
@@ -1866,7 +1852,7 @@ function updateHealthScore(d) {
     const items = [
       { label:'Suhu',            val: d.suhu ? d.suhu.toFixed(1)+'°C' : '--', ok: d.suhu >= 25 && d.suhu <= 32 },
       { label:'Kel. Tanah',      val: d.tanahPersen !== undefined ? d.tanahPersen+'%' : '--', ok: d.tanahPersen >= 50 && d.tanahPersen <= 80 },
-      { label:'Kel. Udara',      val: d.kelembapan ? d.kelembapan.toFixed(1)+'%' : '--', ok: d.kelembapan >= 60 && d.kelembapan <= 85 },
+
       { label:'Cahaya',          val: d.cahaya ? Math.round(d.cahaya)+' lx' : '--', ok: d.cahaya >= 2000 },
     ];
     det.innerHTML = items.map(it => `<div style="background:${it.ok?'var(--green-50)':'#fffbeb'};border:1px solid ${it.ok?'var(--green-200)':'#fde68a'};border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;">
@@ -2105,8 +2091,8 @@ function generateSensorData() {
 
           // Tanah: relatif stabil, malam sedikit lebih lembap
           const tanah = isMalam
-            ? Math.round(55 + rng(i + 300) * 20)
-            : Math.round(45 + rng(i + 300) * 30);
+            ? Math.min(83, Math.round(55 + rng(i + 300) * 20))
+            : Math.min(83, Math.round(45 + rng(i + 300) * 30));
 
           const status = suhu > 32 ? 'Panas' : suhu < 26 ? 'Dingin' : kel < 50 ? 'Kering' : 'Normal';
           data.push({ date: dateStr, time, suhu, kel, cahaya, tanah, status, isSimulated: true });
@@ -2151,14 +2137,10 @@ function applyFilter() {
         <div style="font-family:var(--mono);font-size:0.72rem;color:var(--grey-500);">${d.date} · ${d.time}</div>
         <span class="stat-status ${sc}" style="display:inline-flex;font-size:0.65rem;">${d.status === 'Normal' ? '✓' : '⚠'} ${d.status}</span>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;">
         <div style="background:var(--grey-50);border-radius:7px;padding:7px 4px;text-align:center;">
           <div style="font-size:0.6rem;color:var(--grey-400);margin-bottom:2px;">🌡️ Suhu</div>
           <div style="font-family:var(--mono);font-weight:700;font-size:0.82rem;">${d.suhu}°C</div>
-        </div>
-        <div style="background:var(--grey-50);border-radius:7px;padding:7px 4px;text-align:center;">
-          <div style="font-size:0.6rem;color:var(--grey-400);margin-bottom:2px;">💧 Kel. Udara</div>
-          <div style="font-family:var(--mono);font-weight:700;font-size:0.82rem;color:#06b6d4;">${d.kel}%</div>
         </div>
         <div style="background:var(--grey-50);border-radius:7px;padding:7px 4px;text-align:center;">
           <div style="font-size:0.6rem;color:var(--grey-400);margin-bottom:2px;">🌱 Kel. Tanah</div>
@@ -2182,8 +2164,8 @@ function exportCSV() {
   const allData = generateSensorData();
   let filtered = allData.filter(d => d.date >= dari && d.date <= sampai);
   filtered.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
-  const header = 'Tanggal,Waktu,Suhu (C),Kel. Udara (%),Kel. Tanah (%),Cahaya (lux),Status\n';
-  const rows = filtered.map(d => `${d.date},${d.time},${d.suhu},${d.kel},${d.tanah},${d.cahaya},${d.status}`).join('\n');
+  const header = 'Tanggal,Waktu,Suhu (C),Kel. Tanah (%),Cahaya (lux),Status\n';
+  const rows = filtered.map(d => `${d.date},${d.time},${d.suhu},${d.tanah},${d.cahaya},${d.status}`).join('\n');
   const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a'); a.href = url; a.download = `sawahsmart_${dari}_${sampai}.csv`; a.click();
