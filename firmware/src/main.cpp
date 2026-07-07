@@ -4,19 +4,24 @@
 #include <WiFiClientSecure.h>
 #include <time.h>
 #include "esp_camera.h"
-#include "config.h"
+#include "esp_sleep.h"
 
 // ============================================================
-// KONFIGURASI — ganti sesuai setup Anda (lihat config.h)
+// KONFIGURASI
 // ============================================================
+#define WIFI_SSID       "ALZRA 2.4GHz"
+#define WIFI_PASSWORD   "Alzra1111"
 
-// URL Cloud Run Anda setelah deploy
-#define GCP_BASE_URL    "https://upload-padi-qg55cyk7ea-et.a.run.app"
+// URL Cloud Run setelah deploy
+#define GCP_BASE_URL    "https://upload-padi-je6fikdiha-et.a.run.app"
 #define GCP_UPLOAD      GCP_BASE_URL "/upload"
-#define GCP_CAPTURE_REQ GCP_BASE_URL "/capture-request"
 
-// Interval polling /capture-request (ms). 5000 = cek setiap 5 detik
-#define POLL_INTERVAL_MS  5000UL
+// Deep sleep & capture
+#define SLEEP_SECONDS        600     // tidur 10 menit setelah siklus sukses
+#define SLEEP_RETRY_SECONDS  180     // tidur 3 menit kalau kamera/WiFi gagal, lalu coba lagi
+#define PHOTOS_PER_CYCLE     3       // jumlah foto per siklus
+#define CAPTURE_GAP_MS       15000UL // jeda antar foto (15 detik — variasi exposure)
+#define WARMUP_DELAY_MS      15000UL // jeda 15 detik setelah bangun sebelum foto pertama
 
 // ============================================================
 // Pin ESP32-CAM AI-Thinker
@@ -43,55 +48,130 @@
 // Prototypes
 // ============================================================
 bool initCamera();
-void connectWiFi();
-bool captureAndUpload();
-bool checkCaptureRequest();
+bool connectWiFi();
+bool captureAndUpload(int photoIndex, int totalPhotos);
+void goToDeepSleep(int seconds);
+void keepAliveSleep(int seconds);
 
-unsigned long lastPollTime = 0;
+// Bertahan melintasi deep sleep (disimpan di RTC memory)
+RTC_DATA_ATTR int bootCount = 0;
+
 int uploadCount = 0;
 int failCount   = 0;
-int pollCount   = 0;
 
 // ============================================================
 void setup() {
   Serial.begin(115200);
   delay(500);
+
+  bootCount++;
   Serial.println("\n========================================");
   Serial.println("  ESP32-CAM Padi Harvest Detection");
-  Serial.println("  Board: AI-Thinker ESP32-S | Sensor: OV3660 3MP");
-  Serial.println("  Resolusi: QXGA 2048x1536");
+  Serial.println("  Mode: Deep Sleep + Burst Capture");
+  Serial.printf("  Siklus ke-%d | %d foto/siklus | tidur %d detik\n",
+                bootCount, PHOTOS_PER_CYCLE, SLEEP_SECONDS);
   Serial.println("========================================");
 
   pinMode(FLASH_LED_PIN, OUTPUT);
   digitalWrite(FLASH_LED_PIN, LOW);
 
+  // Init kamera — kalau gagal, tidur singkat lalu coba lagi (jangan tunggu 30 menit)
   if (!initCamera()) {
-    Serial.println("[ERROR] Kamera gagal init — restart dalam 5 detik");
-    delay(5000);
-    ESP.restart();
+    Serial.printf("[ERROR] Kamera gagal init — tidur %d detik lalu coba lagi\n", SLEEP_RETRY_SECONDS);
+    goToDeepSleep(SLEEP_RETRY_SECONDS);
   }
   Serial.println("[OK] Kamera siap");
 
-  connectWiFi();
+  // Konek WiFi — kalau gagal, tidur singkat lalu coba lagi (foto tidak hilang lama)
+  if (!connectWiFi()) {
+    Serial.printf("[ERROR] WiFi gagal — tidur %d detik lalu coba lagi\n", SLEEP_RETRY_SECONDS);
+    goToDeepSleep(SLEEP_RETRY_SECONDS);
+  }
 
-  Serial.println("\n[READY] Sistem siap. Menunggu perintah capture dari dashboard web...");
-  Serial.printf("[POLL] Polling %s setiap %lu detik\n", GCP_CAPTURE_REQ, POLL_INTERVAL_MS / 1000);
-  lastPollTime = 0; // langsung poll di iterasi pertama
+  // Warm-up: tunggu 15 detik biar sensor & WiFi stabil sebelum foto pertama
+  Serial.printf("\n[WARMUP] Tunggu %lu detik sebelum foto pertama...\n", WARMUP_DELAY_MS / 1000UL);
+  delay(WARMUP_DELAY_MS);
+
+  // Burst capture: ambil & upload PHOTOS_PER_CYCLE foto
+  Serial.printf("\n[CYCLE] Mulai burst capture %d foto...\n", PHOTOS_PER_CYCLE);
+  for (int i = 1; i <= PHOTOS_PER_CYCLE; i++) {
+    bool ok = captureAndUpload(i, PHOTOS_PER_CYCLE);
+
+    if (i < PHOTOS_PER_CYCLE) {
+      // Kalau foto gagal total, refresh koneksi WiFi sebelum foto berikutnya
+      if (!ok) {
+        Serial.println("[WiFi] Foto gagal — reconnect WiFi sebelum lanjut...");
+        WiFi.disconnect();
+        delay(500);
+        connectWiFi();
+      }
+      delay(CAPTURE_GAP_MS);
+    }
+  }
+
+  Serial.printf("\n[CYCLE] Selesai — Berhasil: %d | Gagal: %d\n", uploadCount, failCount);
+
+  // Powerbank auto-cutoff kalau beban <60-100 mA → pakai light sleep + pulse flash
+  // sebagai dummy load, biar powerbank tetap nyala tanpa bikin ESP overheat
+  keepAliveSleep(SLEEP_SECONDS);
 }
 
 void loop() {
+  // Tidak terpakai — semua kerja di setup(), lalu deep sleep me-reset chip
+}
+
+// ============================================================
+// Idle window dengan WiFi STA tetap nyala → narik ~70-80 mA konstan,
+// powerbank lihat beban terus-menerus jadi nggak auto-cutoff.
+// Mitigasi panas: kamera di-deinit, CPU diturunkan ke 80 MHz, modem sleep dimatikan
+// (biar radio benar-benar aktif, bukan duty cycle rendah yang dianggap idle).
+// Setelah window habis, ESP.restart() biar state bersih (mirip wake dari deep sleep).
+void keepAliveSleep(int seconds) {
+  Serial.printf("[KEEPALIVE] Idle %d detik (WiFi on @ 80 MHz, kamera off)...\n", seconds);
+  Serial.flush();
+
+  esp_camera_deinit();
+  setCpuFrequencyMhz(80);
+
+  // Pastikan WiFi connected & radio aktif (bukan modem sleep)
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[WARN] WiFi terputus — reconnect...");
-    connectWiFi();
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    int wait = 0;
+    while (WiFi.status() != WL_CONNECTED && wait < 20) { delay(500); wait++; }
+  }
+  WiFi.setSleep(false);
+
+  pinMode(FLASH_LED_PIN, OUTPUT);
+  digitalWrite(FLASH_LED_PIN, LOW);
+
+  // Tunggu N detik dengan log periodik (chunk 30 dtk atau seluruhnya kalau <30 dtk)
+  uint32_t total_s = (uint32_t)seconds;
+  uint32_t chunk_log = 30;
+  for (uint32_t s = 0; s < total_s; s += chunk_log) {
+    uint32_t chunk = (total_s - s >= chunk_log) ? chunk_log : (total_s - s);
+    delay(chunk * 1000UL);
+    Serial.printf("[KEEPALIVE] %u/%u dtk | heap: %u | RSSI: %d dBm\n",
+                  s + chunk, total_s, ESP.getFreeHeap(), WiFi.RSSI());
   }
 
-  if (millis() - lastPollTime >= POLL_INTERVAL_MS) {
-    lastPollTime = millis();
-    if (checkCaptureRequest()) {
-      Serial.println("[CAPTURE] Permintaan capture diterima — mengambil foto...");
-      captureAndUpload();
-    }
-  }
+  setCpuFrequencyMhz(240);
+  Serial.println("[KEEPALIVE] Selesai — restart untuk siklus berikutnya");
+  Serial.flush();
+  ESP.restart();
+}
+
+// ============================================================
+void goToDeepSleep(int seconds) {
+  Serial.printf("[SLEEP] Deep sleep %d detik...\n", seconds);
+  Serial.flush();
+
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+
+  esp_sleep_enable_timer_wakeup((uint64_t)seconds * 1000000ULL);
+  esp_deep_sleep_start();
+  // Tidak ada kode setelah ini — chip reset saat bangun, kembali ke setup()
 }
 
 // ============================================================
@@ -118,16 +198,14 @@ bool initCamera() {
   cfg.xclk_freq_hz = 20000000;
   cfg.pixel_format = PIXFORMAT_JPEG;
 
-  // OV3660 3MP: QXGA (2048×1536) butuh PSRAM ~6MB
-  // Fallback ke resolusi lebih rendah kalau PSRAM tidak ada/cukup
+  // QXGA 2048x1536 — butuh PSRAM, file ~100-200KB
   if (psramFound()) {
-    cfg.frame_size   = FRAMESIZE_QXGA;  // 2048×1536 (max OV3660)
+    cfg.frame_size   = FRAMESIZE_QXGA;  // 2048x1536
     cfg.jpeg_quality = 10;              // 0-63, lower = better quality
-    cfg.fb_count     = 1;               // 1 buffer untuk hemat PSRAM di QXGA
-    Serial.println("[CAM] PSRAM ditemukan — pakai QXGA 2048x1536 (OV3660 3MP)");
+    cfg.fb_count     = 1;
+    Serial.println("[CAM] PSRAM ditemukan — pakai QXGA 2048x1536");
   } else {
-    // Tanpa PSRAM, QXGA tidak mungkin — fallback ke VGA
-    cfg.frame_size   = FRAMESIZE_VGA;   // 640×480
+    cfg.frame_size   = FRAMESIZE_VGA;   // 640x480 fallback
     cfg.jpeg_quality = 15;
     cfg.fb_count     = 1;
     Serial.println("[WARN] Tanpa PSRAM — fallback ke VGA (resolusi rendah)");
@@ -135,51 +213,52 @@ bool initCamera() {
 
   if (esp_camera_init(&cfg) != ESP_OK) return false;
 
-  // Buang beberapa frame agar sensor OV2640 stabil (exposure & AWB)
+  // Buang beberapa frame agar sensor stabil (exposure & AWB)
   for (int i = 0; i < 3; i++) {
     camera_fb_t *dummy = esp_camera_fb_get();
     if (dummy) esp_camera_fb_return(dummy);
     delay(100);
   }
 
-  // Deteksi sensor type (OV2640 = 0x26, OV3660 = 0x3660, OV5640 = 0x5640)
   sensor_t *s = esp_camera_sensor_get();
   Serial.printf("[CAM] Sensor PID: 0x%04X", s->id.PID);
   switch (s->id.PID) {
     case OV2640_PID: Serial.println(" (OV2640 — 2MP)"); break;
-    case OV3660_PID: Serial.println(" (OV3660 — 3MP) ✓"); break;
+    case OV3660_PID: Serial.println(" (OV3660 — 3MP) OK"); break;
     case OV5640_PID: Serial.println(" (OV5640 — 5MP)"); break;
     default:         Serial.println(" (sensor tidak dikenali)"); break;
   }
 
-  // Tuning sensor — OV3660 punya color & exposure handling lebih baik dari OV2640
-  s->set_brightness(s, 0);    // -2 ke 2 (0 = netral, OV3660 cukup terang default)
-  s->set_contrast(s, 0);      // -2 ke 2
-  s->set_saturation(s, 0);    // -2 ke 2 (OV3660 saturasi natural cukup baik)
-  s->set_whitebal(s, 1);      // enable white balance
-  s->set_awb_gain(s, 1);      // enable AWB gain
-  s->set_wb_mode(s, 0);       // 0 = auto white balance
-  s->set_exposure_ctrl(s, 1); // enable AEC
-  s->set_aec2(s, 1);          // DSP AEC (lebih akurat di OV3660)
-  s->set_gain_ctrl(s, 1);     // enable AGC
+  s->set_brightness(s, 0);
+  s->set_contrast(s, 0);
+  s->set_saturation(s, 0);
+  s->set_whitebal(s, 1);
+  s->set_awb_gain(s, 1);
+  s->set_wb_mode(s, 0);
+  s->set_exposure_ctrl(s, 1);
+  s->set_aec2(s, 1);
+  s->set_gain_ctrl(s, 1);
   s->set_agc_gain(s, 0);
-  s->set_gainceiling(s, (gainceiling_t)2);  // GAIN 4x ceiling (anti noise outdoor)
-  s->set_bpc(s, 1);           // bad pixel correction ON (perbaiki dead pixels)
-  s->set_wpc(s, 1);           // white pixel correction ON
-  s->set_raw_gma(s, 1);       // gamma correction
-  s->set_lenc(s, 1);          // lens correction (kurangi vignetting)
-  s->set_hmirror(s, 1);   // flip horizontal (untuk rotate 180° kombinasi dgn vflip)
-  s->set_vflip(s, 1);     // flip vertical — sesuaikan kalau kamera mounting beda
-  s->set_dcw(s, 1);           // downsize EN
+  s->set_gainceiling(s, (gainceiling_t)2);
+  s->set_bpc(s, 1);
+  s->set_wpc(s, 1);
+  s->set_raw_gma(s, 1);
+  s->set_lenc(s, 1);
+  s->set_hmirror(s, 1);
+  s->set_vflip(s, 1);
+  s->set_dcw(s, 1);
   s->set_colorbar(s, 0);
 
   return true;
 }
 
 // ============================================================
-void connectWiFi() {
+bool connectWiFi() {
   Serial.printf("[WiFi] Menghubungkan ke: %s\n", WIFI_SSID);
   WiFi.mode(WIFI_STA);
+  // INADDR_NONE = tetap pakai DHCP untuk IP, tapi paksa DNS ke Google
+  WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE,
+              IPAddress(8, 8, 8, 8), IPAddress(8, 8, 4, 4));
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   int attempts = 0;
@@ -189,29 +268,28 @@ void connectWiFi() {
     attempts++;
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\n[WiFi] Terhubung — IP: %s\n", WiFi.localIP().toString().c_str());
-    // Sync waktu via NTP (UTC+7 WIB)
-    configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov");
-    Serial.print("[NTP] Sinkronisasi waktu");
-    struct tm t;
-    for (int i = 0; i < 20 && !getLocalTime(&t); i++) {
-      delay(500);
-      Serial.print(".");
-    }
-    Serial.println(getLocalTime(&t) ? " OK" : " Gagal (pakai millis)");
-  } else {
-    Serial.println("\n[WiFi] Gagal terhubung — restart dalam 5 detik");
-    delay(5000);
-    ESP.restart();
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("\n[WiFi] Gagal terhubung");
+    return false;
   }
+
+  Serial.printf("\n[WiFi] Terhubung — IP: %s\n", WiFi.localIP().toString().c_str());
+  configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+  Serial.print("[NTP] Sinkronisasi waktu");
+  struct tm t;
+  for (int i = 0; i < 20 && !getLocalTime(&t); i++) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println(getLocalTime(&t) ? " OK" : " Gagal (pakai millis)");
+  return true;
 }
 
 // ============================================================
-bool captureAndUpload() {
-  Serial.println("\n[CAM] Mengambil gambar...");
+bool captureAndUpload(int photoIndex, int totalPhotos) {
+  Serial.printf("\n[CAM] Foto %d/%d — free heap: %u bytes\n",
+                photoIndex, totalPhotos, ESP.getFreeHeap());
 
-  // Nyalakan flash sesaat untuk pencahayaan
   digitalWrite(FLASH_LED_PIN, HIGH);
   delay(150);
   camera_fb_t *fb = esp_camera_fb_get();
@@ -224,98 +302,74 @@ bool captureAndUpload() {
   }
   Serial.printf("[CAM] Frame: %zu bytes (%dx%d)\n", fb->len, fb->width, fb->height);
 
-  // Buat nama file dengan timestamp NTP (fallback ke millis jika NTP belum sync)
-  char filename[48];
+  // Nama file: padi_<MAC>_<timestamp>_<index>.jpg (index agar unik walau detik sama)
+  char filename[64];
   struct tm t;
   if (getLocalTime(&t)) {
     char ts[20];
     strftime(ts, sizeof(ts), "%Y%m%d_%H%M%S", &t);
-    snprintf(filename, sizeof(filename), "padi_%s_%s.jpg",
-             WiFi.macAddress().c_str(), ts);
+    snprintf(filename, sizeof(filename), "padi_%s_%s_%d.jpg",
+             WiFi.macAddress().c_str(), ts, photoIndex);
   } else {
-    snprintf(filename, sizeof(filename), "padi_%s_%lu.jpg",
-             WiFi.macAddress().c_str(), millis());
+    snprintf(filename, sizeof(filename), "padi_%s_%lu_%d.jpg",
+             WiFi.macAddress().c_str(), millis(), photoIndex);
   }
 
-  // Kirim ke Cloud Function via HTTPS
-  WiFiClientSecure client;
-  client.setInsecure(); // OK untuk development — ganti dengan CA cert untuk produksi
-
-  HTTPClient http;
-  if (!http.begin(client, GCP_UPLOAD)) {
-    Serial.println("[HTTP] Gagal begin");
-    esp_camera_fb_return(fb);
-    failCount++;
-    return false;
-  }
-
-  http.addHeader("Content-Type", "image/jpeg");
-  http.addHeader("X-Filename",   filename);
-  http.addHeader("X-Device-ID",  WiFi.macAddress());
-  http.setTimeout(30000); // 30 detik timeout (file QXGA ~400-800KB butuh lebih lama)
-
-  Serial.printf("[HTTP] Mengirim ke GCP (%s)...\n", GCP_UPLOAD);
-  int code = http.POST(fb->buf, fb->len);
-  esp_camera_fb_return(fb); // Bebaskan memori frame sesegera mungkin
-
+  // Retry upload hingga 3x
   bool success = false;
-  if (code > 0) {
-    Serial.printf("[HTTP] Response: %d\n", code);
-    String body = http.getString();
-    Serial.println("[HTTP] Body: " + body);
-    success = (code == 200 || code == 201);
-  } else {
-    Serial.printf("[HTTP] Error: %s\n", http.errorToString(code).c_str());
+  const int MAX_RETRY = 3;
+
+  for (int attempt = 1; attempt <= MAX_RETRY && !success; attempt++) {
+    if (attempt > 1) {
+      Serial.printf("[HTTP] Retry %d/%d — tunggu 3 detik...\n", attempt, MAX_RETRY);
+      delay(3000);
+    }
+
+    WiFiClientSecure client;
+    client.setInsecure(); // skip SSL cert — OK untuk development
+
+    HTTPClient http;
+    if (!http.begin(client, GCP_UPLOAD)) {
+      Serial.println("[HTTP] Gagal begin — skip attempt");
+      client.stop();
+      continue;
+    }
+
+    http.addHeader("Content-Type", "image/jpeg");
+    http.addHeader("X-Filename",   filename);
+    http.addHeader("X-Device-ID",  WiFi.macAddress());
+    http.setTimeout(60000); // 60 detik — QXGA butuh lebih lama dari default
+
+    Serial.printf("[HTTP] Upload %s (attempt %d)...\n", filename, attempt);
+    uint32_t t1 = millis();
+    Serial.printf("[LATENCY] T1_trigger_ms=%lu file=%s attempt=%d\n", t1, filename, attempt);
+    int code = http.POST(fb->buf, fb->len);
+    uint32_t t_resp = millis();
+    Serial.printf("[LATENCY] T_resp_ms=%lu elapsed_ms=%lu code=%d file=%s\n",
+                  t_resp, t_resp - t1, code, filename);
+
+    if (code > 0) {
+      Serial.printf("[HTTP] Response: %d\n", code);
+      String body = http.getString();
+      Serial.println("[HTTP] Body: " + body);
+      success = (code == 200 || code == 201);
+    } else {
+      Serial.printf("[HTTP] Error: %s\n", http.errorToString(code).c_str());
+    }
+
+    http.end();
+    client.stop();
   }
 
-  http.end();
+  esp_camera_fb_return(fb);
 
   if (success) {
     uploadCount++;
-    Serial.printf("[OK] Upload berhasil #%d (file: %s)\n", uploadCount, filename);
+    Serial.printf("[OK] Foto %d/%d berhasil (%s)\n", photoIndex, totalPhotos, filename);
   } else {
     failCount++;
-    Serial.printf("[FAIL] Upload gagal (total gagal: %d)\n", failCount);
+    Serial.printf("[FAIL] Foto %d/%d gagal setelah %d percobaan\n",
+                  photoIndex, totalPhotos, MAX_RETRY);
   }
-
-  Serial.printf("[STAT] Berhasil: %d | Gagal: %d\n", uploadCount, failCount);
   return success;
-}
-
-// ============================================================
-// Polling /capture-request: return true kalau ada permintaan capture
-// ============================================================
-bool checkCaptureRequest() {
-  pollCount++;
-  WiFiClientSecure client;
-  client.setInsecure();
-
-  HTTPClient http;
-  if (!http.begin(client, GCP_CAPTURE_REQ)) {
-    return false;
-  }
-  http.setTimeout(5000);
-
-  int code = http.GET();
-  bool shouldCapture = false;
-
-  if (code == 200) {
-    String body = http.getString();
-    // Parsing JSON sederhana: cari "capture":true
-    // (Hindari ArduinoJson untuk hemat memory)
-    shouldCapture = (body.indexOf("\"capture\":true") >= 0)
-                 || (body.indexOf("\"capture\": true") >= 0);
-    if (pollCount % 12 == 0) {  // log setiap 1 menit (12 poll x 5 detik)
-      Serial.printf("[POLL] #%d — idle (waiting for trigger)\n", pollCount);
-    }
-  } else if (code > 0) {
-    Serial.printf("[POLL] HTTP %d (poll #%d)\n", code, pollCount);
-  } else {
-    if (pollCount % 6 == 0) {
-      Serial.printf("[POLL] Error %s (poll #%d)\n", http.errorToString(code).c_str(), pollCount);
-    }
-  }
-
-  http.end();
-  return shouldCapture;
 }

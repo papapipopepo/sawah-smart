@@ -2,9 +2,6 @@
 
 End-to-end system that classifies rice growth stage (3 classes) from ESP32-CAM field images, served as a cloud inference API and a real-time PWA dashboard. Built as an S2 thesis: a comparative study of **VLM vs ML vs DL vs Hybrid** classifiers, deployed as a 2-tier architecture.
 
-![SawahSmart Dashboard](assets/sawah1.png)
-![SawahSmart Prediction](assets/sawah2.png)
-
 ## Architecture (2-tier)
 
 ```
