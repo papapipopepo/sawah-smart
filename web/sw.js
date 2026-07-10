@@ -1,4 +1,4 @@
-const CACHE = 'sawahsmart-v2';
+const CACHE = 'sawahsmart-v1';
 const OFFLINE_URL = '/';
 
 const PRECACHE = [

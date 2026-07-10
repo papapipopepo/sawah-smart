@@ -1,0 +1,172 @@
+ %-----------------------------------------------------------
+% Bagian Utama Laporan Tugas Akhir
+%------------------------------------------------------------
+
+
+% Tipe dokumen adalah report dengan satu kolom kertas A4 satu sisi.
+
+% Ukuran font 12 pt
+\documentclass[12pt, a4paper, onecolumn, oneside, final, table]{report}
+
+% Load konfigurasi LaTeX untuk tipe laporan Tugas Akhir
+\usepackage{ta}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{cite}
+\usepackage{appendix}
+\usepackage{xcolor}
+% \usetikzlibrary{matrix,backgrounds}
+% \usepackage{pgfplots}
+% \pgfplotsset{compat=1.16}
+\renewcommand\appendixname{Appendices}
+\renewcommand\appendixpagename{Appendices}
+\renewcommand\appendixtocname{Appendices}
+\newcommand{\ignore}[1]{}
+% tambahan
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{textcomp}
+\usepackage{mathtools,mathptmx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{braket}
+\usepackage{bigints}
+\DeclareUnicodeCharacter{2212}{-}
+\usetikzlibrary{intersections,positioning,arrows.meta,shapes.geometric,fit,calc}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\scriptsize\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\scriptsize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=10pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+\usepackage{pdfpages}
+%\usepackage[table,xcdraw]{xcolor}
+
+% Pengaturan pemenggalan kata / hyphenation
+\hyphenation{dengan di-mo-del-kan mo-du-la-si Nu-me-ro-logy Pe-ne-ra-pan di-nya-ta-kan}
+
+% Load konfigurasi khusus untuk laporan yang sedang dibuat
+\input{konfigurasi}
+
+% Awal bagian penulisan laporan Tugas Akhir
+\begin{document}
+
+% Sampul Laporan Tugas Akhir
+\include{sampul}
+
+% Tidak mengaktifkan penomoran halaman
+\pagenumbering{gobble}
+
+% Halaman Pengesahan
+% \addChapter{APPROVAL PAGE}
+% \include{pengesahan}
+
+% Halaman Pernyataan Orisinalitas
+% \addChapter{SELF DECLARATION AGAINST PLAGIARISM}
+% \include{orisinalitas}
+
+% Menggunakan penomoran halaman Romawi
+\pagenumbering{roman}
+
+% Setelah bagian ini, halaman dihitung sebagai halaman ke-2
+\setcounter{page}{1}
+
+% Abstrak dalam Bahasa Indonesia
+%\addChapter{ABSTRAK}
+%\include{abstrak}
+
+% Abstrak dalam Bahasa Inggris
+\addChapter{ABSTRACT}
+\include{abstract}
+
+% Ucapan Terima Kasih
+% \addChapter{ACKNOWLEDGMENTS}
+% \include{ucapan}
+
+% Kata Pengantar
+% \addChapter{\kataPengantar}
+% \include{pengantar}
+
+% Daftar Isi
+\tableofcontents
+\clearpage
+
+% Daftar Gambar
+\listoffigures
+\clearpage
+
+% Daftar Tabel
+\listoftables
+\clearpage
+
+% Daftar Singkatan / List of Abbreviations
+\addChapter{LIST OF ABBREVIATIONS}
+\include{singkatan}
+
+% Daftar Achievement
+%\addChapter{ACHIEVEMENT}
+%\include{achievement}
+
+% Menggunakan penomoran Arab (1, 2, 3, ...)
+\pagenumbering{arabic}
+
+% Bab 1: Pendahuluan
+\include{bab1}
+
+% Bab 2: Konsep Dasar
+\include{bab2}
+
+% Bab 3: Proposed Rateless Accumulate Tornado Codes, Model System and Research Design
+\include{bab3}
+
+% Bab 4: Performance Evaluation
+\include{bab4}
+
+% Bab 5: Kesimpulan dan Saran
+\include{bab5}
+
+
+% Daftar Referensi
+\bibliographystyle{IEEEtran}
+\bibliography{ref_database}
+\clearpage
+
+% Lampiran
+\appendix
+% Override ta.sty's \thetable/\thefigure/\thesection which hard-code
+% \arabic{chapter}, so appendix items render as A.1, B.1 (using \thechapter)
+% rather than colliding with body 1.1, 2.1.
+\renewcommand{\thetable}{\thechapter.\arabic{table}}
+\renewcommand{\thefigure}{\thechapter.\arabic{figure}}
+\renewcommand{\thesection}{\thechapter.\arabic{section}}
+% Singular "Appendix" instead of the appendix-package default "Appendices".
+\renewcommand{\appendixname}{Appendix}
+\include{./lampiran_A}
+%\includepdf[pages=-]{lampiran/paper.pdf}
+%\includepdf[pages=-]{lampiran/slide.pdf}
+
+
+% Akhir bagian dari penulisan Laporan Tugas Akhir
+\end{document}
+
+%-----------------------------------------------------------------------------

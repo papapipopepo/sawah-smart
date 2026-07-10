@@ -1,0 +1,22 @@
+%-----------------------------------------------------------------------------
+\chapter{\babLima}
+%-----------------------------------------------------------------------------
+
+\section{Conclusions}
+
+The four-family comparative study converges on a tight accuracy band under $95$ percent bootstrap confidence intervals: the Hybrid configuration pairing EfficientNetB0 with ExGR vegetation features leads test Macro F1 at $0.9662$, the classical SVM-RBF with ExGR follows at $0.9577$ in a $55$ KB artifact, and EfficientNetB0 alone reaches $0.9532$ on $104$ held-out images, with overlapping intervals that make the headline ordering not statistically separable at the present test-set size.
+
+The vision-language cohort rejects all twelve non-rice probes at $0$ percent false-accept rate but collapses on phenology discrimination: it over-triggers Mature on Generative frames and fails on bench-scale carry-over, confirming that proprietary general-purpose endpoints are not viable as stand-alone phenology classifiers at this scale. The two-tier pipeline resolves the tension by assigning Gemini 2.5 Flash Lite as a binary gatekeeper at $4.81$ percent false-reject and placing the supervised Hybrid model as the phenology classifier behind it, achieving an end-to-end median latency of $8.57$ seconds inside the ten-minute capture cadence and $100$ percent Mature Recall on $51$ bench-scale frames.
+
+Architectural assignment doubles as a regulatory compliance mechanism, though not through model selection: bench-scale validation showed the $55$ KB Classical artifact collapses to $0.0000$ Mature Recall on ESP32-CAM imagery against $1.0000$ for the deployed Hybrid configuration, so the compliance posture rests on where each component runs rather than on which supervised classifier is smallest. Hosting the supervised classifier in asia-southeast2 keeps personal data inside the jurisdiction whose protection regime governs it, and confining the vision-language model to a binary rice-or-not gate concentrates the cross-border transfer surface under Article 56 to the minimum decision the system must make. Together, this architectural assignment discharges the obligations of Law Number 19 of 2016, Government Regulation Number 71 of 2019, Law Number 27 of 2022, ISO/IEC 30141:2024, and ITU-T Recommendation Y.2060 within the deployed pipeline, independent of which supervised classifier is active behind the gatekeeper.
+
+
+\section{Future Works}
+
+Enlarging the Mature test subset beyond support $21$ would narrow the bootstrap interval on Mature Recall from its current $[0.85, 1.00]$ span and determine whether the $100$ percent bench-scale result holds across cultivar variation.
+
+Extending the bench-scale rig to cover Vegetative and Generative frames and pairing it with a multi-device pilot on smallholder plots across cultivars, climates, and irrigation regimes would validate whether the latency and accuracy results transfer outside the controlled proximal-capture setup.
+
+Replacing the proprietary gatekeeper with a self-hosted open-source vision-language model such as Qwen2.5-VL or InternVL2 on the same Cloud Run revision, combined with a Data Protection Impact Assessment under Law Number 27 of 2022 and an ISO/IEC 27001 or SNI ISO/IEC 27001 audit on the cloud backend, would close the cross-border transfer surface left open by the current deployment and evidence operator obligations under Government Regulation Number 71 of 2019 through external verification.
+
+Quantizing MobileNetV3-Small for on-device inference through TensorFlow Lite Micro would push the classifier back onto the perception layer, eliminate the WiFi-side round trip that currently dominates the latency budget, and enable harvest-readiness detection without network connectivity.

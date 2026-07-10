@@ -1,0 +1,167 @@
+%-----------------------------------------------------------------------------
+\chapter{\babSatu}
+%-----------------------------------------------------------------------------
+% Chapter 1 menceritakan gambaran singkat dari penelitian. Penjelasan lebih rinci-nya nanti di Chapter 2, 3, 4, dll. Yang pertama disusun adalah Chapter 2 dan Chapter 3 dulu, tulis semua informasi terkait yang berhasil dihimpun, baru maju ke Chapter 1. Harus bisa menjawab semua pertanyaan yang mungkin ditanyakan.
+ 
+
+
+%-----------------------------------------------------------------------------
+\section{Background}
+
+%----------------------------------------------------------------------------
+Rice (\textit{Oryza sativa} L.) is one of the world's most essential staple food crops, vital for the food security of more than half of the global population, with Asia accounting for the dominant share of global production and consumption \cite{mohidem2022rice}. In Indonesia, the 2023 Agricultural Census reports that 17{,}251{,}432 of 27{,}802{,}434 agricultural land users (about 62 percent) are smallholder farmers (\textit{petani gurem}) cultivating less than 0.5 hectares, with food crops forming the dominant subsector at 15{,}550{,}786 farming households \cite{bps2023sensus}. For these farmers, harvest timing is decisive for both yield quality and income: harvesting too early reduces yield and produces immature grains with elevated chalkiness, while delayed harvesting in tropical regions lowers the head rice rate and increases shattering losses, both degrading milling quality and market value \cite{zhou2025metaharvest}. Accurate identification of rice phenological stages, especially the transition into the mature, harvest-ready phase, is therefore critical for sound agronomic decisions on smallholder plots.
+
+In practice, smallholder farmers in Indonesia rely on Days After Sowing (DAS) estimation or visual inspection to decide harvest timing. These methods are imprecise because growth phase duration varies with cultivar and microclimatic conditions such as temperature, leading to inconsistent decisions and avoidable post-harvest losses \cite{sanwong2023ricetemp}. The problem is amplified on small plots, where access to agronomic expertise and continuous monitoring is limited.
+
+Precision agriculture has introduced remote sensing technologies such as satellite imagery and Unmanned Aerial Vehicle (UAV) mounted multispectral cameras, which monitor crop development through vegetation indices like the Normalized Difference Vegetation Index (NDVI) \cite{huang2021ndvi}. These technologies correlate strongly with crop phenology, but their acquisition cost, recurring operational expense, and required technical expertise place them out of reach for smallholder farmers \cite{boursianis2022iot}. This leaves a clear gap: affordable proximal (in-field) monitoring solutions that can be deployed with minimal infrastructure and operated without specialized skills.
+
+Low-cost embedded imaging modules offer a viable pathway. The ESP32-CAM, an inexpensive system-on-chip integrating a camera sensor with a Wi-Fi microcontroller, can be deployed in the field for close-range, top-down rice canopy capture \cite{elhattab2023esp32cam}. Paired with a cloud backend, it forms an Internet of Things (IoT) monitoring system suited to resource-constrained settings. Field images from consumer-grade sensors, however, exhibit complex backgrounds with variable illumination, motion blur, and inadvertent capture of non-rice objects \cite{tan2023riceres2net}, all of which require a robust validation step before reliable interpretation.
+
+Once a usable canopy image is available, the choice of classification approach is not obvious. Classical machine learning trained on hand-crafted vegetation indices and Gray Level Co-occurrence Matrix (GLCM) texture descriptors offers interpretable, low-resource inference. Transfer-learning Convolutional Neural Networks (CNNs) have achieved high accuracy on crop classification in controlled settings \cite{qin2023ricephenology,tan2023riceres2net}. Hybrid architectures fuse a CNN backbone with hand-crafted vegetation features at the classification head, combining deep representations with an agronomic prior. Large Language Models (LLMs) and Vision-Language Models (VLMs) such as the GPT-4o and Gemini families have demonstrated strong zero-shot generalization across visual recognition tasks without task-specific training \cite{zhang2024vlmsurvey}. Each family occupies a different point in the accuracy, latency, cost, and data-requirement design space, yet no systematic head-to-head comparison of the four for rice harvest-readiness detection from low-cost in-field imaging is available in the literature.
+
+Conventional supervised classifiers operate under a closed-world assumption: they assign every input to one of the predefined classes regardless of relevance. In an open field, where the camera may capture soil, water, equipment, or other out-of-distribution objects, such classifiers produce confident but spurious harvest-readiness predictions that erode system reliability \cite{geng2021openset}. Evidence on VLMs in agricultural visual recognition is nuanced: zero-shot performance has been demonstrated on tasks such as weed detection, but accuracy and interpretability are materially shaped by prompt construction rather than raw model capacity alone, which leaves VLMs short of supervised baselines as primary classifiers in the agricultural domain \cite{frontiers2026weedvlm}. This motivates a defensive design in which the VLM serves as a gatekeeper that verifies whether an input genuinely contains rice and is of acceptable quality, rather than the primary phenology classifier. Pairing such a gatekeeper with the strongest supervised classifier addresses both the open-world limitation and the scarcity of labelled rice canopy imagery.
+
+Beyond the technical dimension, an IoT-based agricultural monitoring system transmits, stores, and processes digital data across telecommunication networks, placing it within the scope of national and international data governance frameworks. In Indonesia, Law Number 19 of 2016 on Electronic Information and Transactions establishes the legal basis for secure handling of electronically transmitted data \cite{uuite2016}, while Government Regulation Number 71 of 2019 on the Implementation of Electronic Systems and Transactions sets reliability, security, and accountability requirements for electronic system operators \cite{pp71_2019}. Law Number 27 of 2022 on Personal Data Protection further establishes the first comprehensive personal data protection regime in Indonesia, with direct implications for farmer-side identifiers handled by the dashboard \cite{uupdp2022}. Internationally, ISO/IEC 30141:2024 defines an IoT reference architecture emphasizing interoperability, security, and trustworthiness \cite{iso30141_2024}, and ITU-T Recommendation Y.2060 outlines the foundational characteristics of IoT including network interconnectivity and embedded security \cite{itut_y2060}. From the perspective of telecommunication regulation and management, aligning an affordable agricultural IoT platform with these frameworks is essential for responsible, scalable, and sustainable adoption.
+
+
+%--------------------------------------------------------
+\section{Problem Identification}
+%--------------------------------------------------------
+This study is motivated by the following problem statements:
+\begin{enumerate}
+    \item Harvest-readiness assessment on smallholder rice plots still relies on subjective visual judgment, while satellite, drone, and multispectral approaches do not fit the cost and scale of individual smallholder land.
+
+    \item Conventional supervised classifiers operate under a closed-world assumption, so they force a phenology class onto non-rice objects, blurred frames, or out-of-distribution inputs captured under uncontrolled field conditions.
+
+    \item Publicly available rice-phenology image datasets are scarce, and zero-shot Vision-Language Models cannot be assumed to replace supervised classifiers because they exhibit systematic class-pair confusion at the Generative-to-Mature transition and unstable carry-over to proximal field imagery, even when their headline accuracy on curated benchmarks is competitive.
+
+    \item No systematic comparative evidence exists on which classification family, namely classical machine learning, transfer-learning CNN, hybrid CNN with vegetation index features, or Vision-Language Models, best balances classification performance, inference latency, and operational cost for rice harvest-readiness detection from low-cost in-field imaging.
+
+    \item Low-cost agricultural IoT prototypes rarely address the data-governance and regulatory obligations that apply once images are transmitted, stored, and processed in the cloud.
+\end{enumerate}
+
+
+\section{Objective and Contributions}
+The objectives and contributions of this study are as follows:
+\begin{enumerate}
+    \item To develop an ESP32-CAM in-field imaging subsystem that captures rice canopy images on a periodic deep-sleep wake cycle and delivers them to a cloud backend with a dashboard, providing an affordable alternative to satellite, drone, and multispectral monitoring on smallholder plots.
+
+    \item To conduct a systematic comparative study of four classification families, namely classical machine learning with vegetation indices and GLCM texture features, transfer-learning Convolutional Neural Networks, hybrid CNN with vegetation index features, and Vision-Language Models, on classification performance, inference latency, and operational cost for rice harvest-readiness detection.
+
+    \item To integrate a tiered detection pipeline consisting of a Vision-Language Model open-world gatekeeper and a phenology classifier covering three stages, namely vegetative, generative, and mature.
+
+    \item To use the Vision-Language Model as a gatekeeper rather than as the primary classifier, rejecting non-rice and low-quality inputs in order to mitigate the closed-world limitation of supervised classifiers and the scarcity of labelled rice imagery.
+
+    \item To examine the data-governance and regulatory requirements that apply to the cloud-based imaging pipeline and to align the system design with recognized electronic-system, data-protection, and IoT reference-architecture principles.
+\end{enumerate}
+
+
+%--------------------------------------------------------
+\section{Scope of Work}
+%--------------------------------------------------------
+The scope of this study includes:
+\begin{enumerate}
+    \item The imaging hardware is limited to a single low-cost ESP32-CAM (AI-Thinker, OV3660) mounted above a bench-scale rice plant setup consisting of four polybags placed inside a litter box, configured for close-range, top-down, periodic deep-sleep wake-cycle capture. Other camera types, continuous video recording, and additional sensors or actuators are outside this scope.
+
+    \item The detection target is rice phenology classified into three stages only, namely vegetative, generative, and mature, where mature denotes harvest readiness. Other crops, diseases, pests, and yield estimation are not covered.
+
+    \item The detection pipeline is limited to two tiers, namely a Vision-Language Model open-world gatekeeper and a phenology classifier. The Vision-Language Model is used for input rejection and gatekeeping, not as the primary stage classifier.
+
+    \item The comparative study covers four classification families, namely classical machine learning with vegetation indices and GLCM texture features, transfer-learning Convolutional Neural Networks, hybrid CNN with vegetation index features, and Vision-Language Models. Each family is represented by a small set of implementations rather than an exhaustive survey, and is evaluated on classification performance, inference latency, and operational cost.
+
+    \item Training and offline evaluation use a dataset curated by the author from publicly available rice imagery on Hugging Face and Roboflow, with manual organization and three-class labelling. No primary dataset is collected for model training. Field validation with the ESP32-CAM is performed on the bench-scale polybag setup and is limited to verification of the mature stage as a proof-of-concept deployment, not a statistical validation of all three classes in an actual smallholder field.
+
+    \item All model inference runs on the cloud backend, consisting of Google Cloud Run, Google Cloud Storage, and Firebase Realtime Database, with a Progressive Web Application dashboard hosted on Netlify. On-device or edge deployment on the ESP32-CAM or other boards is outside this scope, and deployment is at prototype scale on the bench-scale polybag setup rather than at full production or large-area operation.
+
+    \item The data-governance analysis is limited to applicable Indonesian electronic-system and data-protection regulations and recognized IoT reference architectures. It is a design-alignment review, not a legal audit or formal compliance certification.
+\end{enumerate}
+
+
+
+%--------------------------------------------------------
+\section{Research Methodology}
+%--------------------------------------------------------
+This study is divided into several Work Packages (WP) to support structured execution and ensure alignment with the intended objectives. The following WPs will be carried out:
+\begin{itemize}
+
+    \item WP 1: Research Identification \\
+    Identify the technical challenges in detecting rice harvest readiness from low-cost in-field imagery, including the subjectivity of manual visual judgment commonly used by smallholder farmers, the cost and scale mismatch of remote sensing approaches for individual smallholder plots, the closed-world limitation of conventional supervised classifiers, the scarcity of labelled rice canopy imagery, and the absence of systematic comparative evidence across classification families.
+
+    \item WP 2: Literature and Regulatory Study \\
+    Review recent research on proximal (in-field) crop imaging, rice phenology classification, open-set recognition, and the use of Vision-Language Models for zero-shot agricultural tasks. Review the Indonesian regulatory framework (Law Number 19 of 2016, Government Regulation Number 71 of 2019, and Law Number 27 of 2022 on Personal Data Protection) and international references such as ISO/IEC 30141 and ITU-T Recommendation Y.2060 on IoT reference architecture.
+
+    \item WP 3: System Design and Deployment \\
+    Develop the proposed system architecture by mounting a low-cost ESP32-CAM (AI-Thinker, OV3660) above a bench-scale rice plant setup of four polybags placed inside a litter box for close-range, top-down, periodic deep-sleep wake-cycle capture, deploying a Flask backend on Google Cloud Run, and configuring Google Cloud Storage, Firebase Realtime Database, and the Progressive Web Application dashboard together with the supporting network connectivity.
+
+    \item WP 4: Dataset Curation and Preprocessing \\
+    Curate a three-class rice phenology dataset from publicly available rice imagery on Hugging Face and Roboflow, with manual organization and labelling into vegetative, generative, and mature classes. Apply standard image preprocessing such as resizing and normalization, and partition the data for five-fold cross-validation on the training portion and a held-out test set.
+
+    \item WP 5: Model Development and Comparative Study \\
+    Implement and compare four classification families, namely classical machine learning with vegetation indices and GLCM texture features, transfer-learning Convolutional Neural Networks, hybrid CNN with vegetation index features at the classification head, and Vision-Language Models. Integrate the best-performing supervised classifier with the Vision-Language Model open-world gatekeeper into the production pipeline with dashboard visualization.
+
+    \item WP 6: Evaluation, Compliance, and Reporting \\
+    Evaluate classification performance on the held-out test set, gatekeeper rejection behavior on out-of-distribution inputs, inference latency, and operational cost on the cloud backend. Verify the integrated pipeline through a proof-of-concept ESP32-CAM deployment on the bench-scale polybag setup limited to the mature stage. Conduct a data-governance and compliance assessment against the relevant national regulations and international IoT references, and document findings in the final thesis report.
+\end{itemize}
+
+%-----------------------------------------------------------------------------
+%\section{Organization of the Thesis}
+%-----------------------------------------------------------------------------
+%The rest of this thesis is organized as follows:
+%\begin{itemize}
+%\item[] \textbf{CHAPTER II: \babDua}\\
+%This chapter provides basic concepts used in this thesis. The explanation focuses on general quantum communications and the basic concept of OAM, qudit, multiplexing in classical and quantum communications.  
+%\item[] \textbf{CHAPTER III: \babTiga}\\
+%This chapter describes the system model, %including parameters used in the proposal %thesis. 
+% research methodology, and research design.	
+% \item[] \textbf{CHAPTER 4: \babEmpat}\\
+% This chapter discusses the result of this thesis, starting from the validation and observation to the performance of the proposed design. Then, BER, capacity and spectral efficiency are used to analyze the performance of the proposed codes.
+% \item[] \textbf{CHAPTER 5: \babLima}\\
+% This chapter provides the conclusion of this thesis and notifies the future works.
+%\end{itemize}
+
+\section{Research Plan and Action Point}
+
+This study will be conducted in a structured manner following a predetermined schedule to ensure timely completion and alignment with the planned targets. Table~\ref{tab:tabel1-1} presents an overview of the workflow, including the stages and activities to be carried out throughout its duration.
+
+\begin{table}[h]
+    \centering
+    \caption{Thesis Schedule}
+    \label{tab:tabel1-1}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|p{5.3cm}|c|c|c|c|c|c|c|c|}
+        \hline
+        \multirow{2}{*}{\textbf{Thesis Component}} & \multicolumn{8}{c|}{\textbf{2026}} \\
+        \cline{2-9}
+         & \textbf{Jan} & \textbf{Feb} & \textbf{Mar} & \textbf{Apr} & \textbf{May} & \textbf{Jun} & \textbf{Jul} & \textbf{Aug} \\
+        \hline
+        Research Identification & \cellcolor{green!30} & \cellcolor{green!30} & & & & & & \\
+        \hline
+        Literature and Regulatory Study & \cellcolor{green!30} & \cellcolor{green!30} & \cellcolor{green!30} & \cellcolor{green!30} & & & & \\
+        \hline
+        Background Writing & & \cellcolor{green!30} & \cellcolor{green!30} & & & & & \\
+        \hline
+        Problem Formulation and Objectives & & \cellcolor{green!30} & \cellcolor{green!30} & & & & & \\
+        \hline
+        System Design and Deployment & & & \cellcolor{green!30} & \cellcolor{green!30} & \cellcolor{green!30} & & & \\
+        \hline
+        Dataset Curation and Preprocessing & & & \cellcolor{green!30} & \cellcolor{green!30} & & & & \\
+        \hline
+        Model Development and Comparative Study & & & & \cellcolor{green!30} & \cellcolor{green!30} & \cellcolor{green!30} & & \\
+        \hline
+        Bench-scale ESP32-CAM Validation & & & & & & \cellcolor{green!30} & \cellcolor{green!30} & \\
+        \hline
+        Data Governance and Compliance Review & & & & & \cellcolor{green!30} & \cellcolor{green!30} & & \\
+        \hline
+        Result and Discussion Writing & & & & & \cellcolor{green!30} & \cellcolor{green!30} & \cellcolor{green!30} & \\
+        \hline
+        Conclusion and Recommendations & & & & & & & \cellcolor{green!30} & \cellcolor{green!30} \\
+        \hline
+        Thesis Draft Review and Revisions & & & & & & & \cellcolor{green!30} & \cellcolor{green!30} \\
+        \hline
+        Thesis Seminar and Defense & & & & & & & & \cellcolor{green!30} \\
+        \hline
+    \end{tabular}
+\end{table}
+

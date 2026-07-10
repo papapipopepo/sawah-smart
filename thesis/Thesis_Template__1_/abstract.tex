@@ -1,0 +1,12 @@
+%---------------------------------------------------------
+% Abstrak (Bahasa Inggris)
+%---------------------------------------------------------
+\chapter*{Abstract}
+\vspace*{0.7cm}
+
+\noindent This study develops a low-cost cloud-based system for rice harvest-readiness detection, designed for smallholder plots and validated at bench scale on four polybag-grown plants inside a single litter box. It targets two gaps: the cost mismatch of satellite and unmanned-aerial-vehicle sensing at sub-hectare scale, and the closed-world limitation of supervised classifiers that label non-rice or unusable frames. An ESP32-CAM AI-Thinker module with an OV3660 sensor captures a top-down canopy image on each deep-sleep wake and uploads it through Google Cloud Storage to a Flask service on Google Cloud Run, which writes predictions into a Firebase Realtime Database for a Netlify-hosted Progressive Web App dashboard. Four classification families are compared on the same 1140-image curated dataset (1036 for five-fold stratified cross-validation, 104 held-out test) across vegetative, generative, and mature phases: classical machine learning over color vegetation indices with Gray Level Co-occurrence Matrix texture, transfer-learned convolutional backbones, late-fusion hybrids, and hosted vision-language endpoints used as open-world gatekeepers rather than primary classifiers. The hybrid EfficientNetB0 with ExGR leads test Macro F1 at 0.9662 and the classical Support Vector Machine with ExGR follows at 0.9577 in a 55 KB artifact, but this parity does not carry to the deployed ESP32-CAM sensor, so the pipeline retains the hybrid classifier. The deployed gatekeeper (Gemini 2.5 Flash Lite) rejects all twelve non-rice probes at a 0 percent false-accept and 4.81 percent false-reject rate, with 8.57 second median end-to-end latency within a ten-minute capture cadence. Data governance is encoded into the architecture through Indonesia-region storage residency, separation of device and farmer identifiers, least-privilege Identity and Access Management, and audit logging aligned with Law Number 19 of 2016 on Electronic Information and Transactions, Government Regulation Number 71 of 2019, Law Number 27 of 2022 on Personal Data Protection, ISO/IEC 30141:2024, and ITU-T Recommendation Y.2060.
+\vspace{0.2in}
+ \noindent
+\\ \textbf{Keywords:} rice phenology, proximal imaging, ESP32-CAM, vision-language model, open-set recognition, IoT data governance, smallholder agriculture.
+
+%------------------------------------------------------------

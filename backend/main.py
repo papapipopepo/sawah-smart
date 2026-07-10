@@ -3,13 +3,13 @@ Cloud Run service: upload_padi + multi-model detect
 
 Arsitektur 2-tier sesuai tesis SawahSmart:
   Tier 1 (gatekeeper) : VLM open-world reject (is_rice only)
-  Tier 2 (classifier) : Hybrid EffNetB0+ExGR (default), SVM-RBF+ExGR, atau VLM zero-shot
+  Tier 2 (classifier) : Hybrid EffNetB0+ExGR (default) atau VLM zero-shot
 
 Endpoints:
 - POST   /upload                  : Terima JPEG dari ESP32-CAM, simpan ke GCS
 - POST   /predict                 : Deteksi + upload (model via header X-Model)
 - POST   /predict-existing/<name> : Deteksi foto yang sudah ada di GCS (X-Model)
-- GET    /models                  : Daftar model tersedia (Hybrid/SVM/VLM)
+- GET    /models                  : Daftar model tersedia (Hybrid/VLM)
 - GET    /images                  : List gambar terbaru dari GCS
 - GET    /image/<name>            : Serve gambar (GET) / hapus (DELETE)
 - GET    /health                  : Health check
@@ -19,8 +19,12 @@ Alur deteksi (run_detection):
   2. Klasifikasi via model terpilih:
      - VLM (GPT-4o/4o-mini, Gemini 2.5 Flash/Flash-Lite): gatekeeper + fase 1 call
      - Hybrid EffNetB0+ExGR (lokal): VLM gatekeeper dulu, lalu Hybrid klasifikasi
-     - SVM-RBF+ExGR (lokal): VLM gatekeeper dulu, lalu SVM klasifikasi
   3. ExGR heatmap + green fraction selalu dihitung (numpy/matplotlib)
+
+Catatan: SVM-RBF+ExGR (ml/eval_bench.py) diverifikasi 0.0000 Mature Recall di
+  ESP32-CAM bench-scale (lihat thesis/canonical_numbers.md) — dicabut dari
+  registry model web 2026-07-08, kode predict_svm_rbf/get_svm_model dibiarkan
+  ada tapi tidak lagi didaftarkan ke MODEL_REGISTRY/LOCAL_PREDICTORS.
 
 Env vars: GCS_BUCKET_NAME, HYBRID_MODEL_PATH, SVM_MODEL_PATH, LABEL_ENCODER_PATH,
   OPENAI_API_KEY, GEMINI_API_KEY, DEFAULT_MODEL, GATEKEEPER_MODEL, LANGFUSE_*
@@ -64,7 +68,6 @@ PROVIDERS = {
 MODEL_REGISTRY = {
     # model_id (web/header)            provider    api_model                  label tampil
     "hybrid-effnetb0-exgr":  {"provider": "local",  "model": None,                    "label": "Hybrid EffNetB0 + ExGR"},
-    "svm-rbf-exgr":          {"provider": "local",  "model": None,                    "label": "ML SVM-RBF + ExGR"},
     "gemini-2.5-flash-lite": {"provider": "gemini", "model": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash-Lite"},
     "gemini-2.5-flash":      {"provider": "gemini", "model": "gemini-2.5-flash",      "label": "Gemini 2.5 Flash"},
     "gpt-4o":                {"provider": "openai", "model": "gpt-4o",                "label": "GPT-4o"},
@@ -74,7 +77,6 @@ MODEL_REGISTRY = {
 # Path lokal per model_id (untuk available_models check & loading).
 LOCAL_MODEL_PATH = {
     "hybrid-effnetb0-exgr": HYBRID_MODEL_PATH,
-    "svm-rbf-exgr":         SVM_MODEL_PATH,
 }
 
 GATEKEEPER_MODEL = os.environ.get("GATEKEEPER_MODEL", "gemini-2.5-flash-lite")
@@ -473,7 +475,6 @@ def exgr_visualization(rgb):
 # Local supervised dispatcher (model_id → predict fn).
 LOCAL_PREDICTORS = {
     "hybrid-effnetb0-exgr": predict_hybrid_cnn,
-    "svm-rbf-exgr":         predict_svm_rbf,
 }
 
 
@@ -753,8 +754,6 @@ def available_models():
     for mid, reg in MODEL_REGISTRY.items():
         if reg["provider"] == "local":
             ok = os.path.exists(LOCAL_MODEL_PATH.get(mid, ""))
-            if mid == "svm-rbf-exgr":
-                ok = ok and os.path.exists(LABEL_ENCODER_PATH)
         else:
             ok = bool(os.environ.get(PROVIDERS[reg["provider"]]["key_env"]))
         out.append({"id": mid, "label": reg["label"],
