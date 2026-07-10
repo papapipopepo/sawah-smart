@@ -195,20 +195,25 @@ def extract_glcm_feats(rgb):
     return feats
 
 
-def render_exgr_heatmap_b64(vi_map, mask):
-    """Render ExGR heatmap pakai matplotlib 'Greens' cmap → PNG base64."""
+def render_exgr_heatmap_b64(rgb, vi_map):
+    """Render citra asli + ExGR grayscale (full-frame, unmasked) -> PNG base64.
+    Gaya sama seperti figur metodologi tesis (ml/make_vi_maps_per_class.py):
+    grayscale tanpa masking, karena classifier menghitung statistik VI di
+    seluruh frame, bukan cuma piksel yang lolos green-mask. Panel kiri
+    menampilkan citra asli yang dianalisis model."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    masked = vi_map.astype(float).copy()
-    masked[~mask] = np.nan
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.5), dpi=90)
+    axes[0].imshow(rgb)
+    axes[0].set_title("Citra Asli", fontsize=11, fontweight="bold")
+    axes[0].axis("off")
 
-    fig, ax = plt.subplots(figsize=(6, 4.5), dpi=90)
-    im = ax.imshow(masked, cmap="Greens")
-    ax.set_title("Indeks Vegetasi ExGR", fontsize=11, fontweight="bold")
-    ax.axis("off")
-    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    im = axes[1].imshow(vi_map, cmap="gray")
+    axes[1].set_title("Indeks Vegetasi ExGR", fontsize=11, fontweight="bold")
+    axes[1].axis("off")
+    plt.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)
     plt.tight_layout()
 
     buf = io.BytesIO()
@@ -261,7 +266,7 @@ def predict_hybrid_cnn(rgb):
         "vi_name": "ExGR",
         "vi_stats": stats,
         "green_fraction": float(mask.mean()),
-        "exg_heatmap_b64": render_exgr_heatmap_b64(vi_map, mask),
+        "exg_heatmap_b64": render_exgr_heatmap_b64(rgb, vi_map),
     }
 
 
@@ -299,7 +304,7 @@ def predict_svm_rbf(rgb):
         "vi_name": "ExGR",
         "vi_stats": stats,
         "green_fraction": float(mask.mean()),
-        "exg_heatmap_b64": render_exgr_heatmap_b64(vi_map, mask),
+        "exg_heatmap_b64": render_exgr_heatmap_b64(rgb, vi_map),
     }
 
 
@@ -468,7 +473,7 @@ def exgr_visualization(rgb):
         "vi_name": "ExGR",
         "vi_stats": extract_vi_stats(vi_map.flatten()),
         "green_fraction": float(mask.mean()),
-        "exg_heatmap_b64": render_exgr_heatmap_b64(vi_map, mask),
+        "exg_heatmap_b64": render_exgr_heatmap_b64(rgb, vi_map),
     }
 
 
