@@ -2243,7 +2243,7 @@ function applyFilter() {
   const info   = document.getElementById('filter-info');
   if (!dari || !sampai) { info.textContent = '⚠️ Pilih rentang tanggal.'; return; }
   if (dari > sampai)    { info.textContent = '⚠️ Tanggal "Dari" tidak boleh lebih besar dari "Sampai".'; return; }
-  const allData = generateSensorData().filter(d => d.date <= "2026-07-18");
+  const allData = generateSensorData().filter(d => d.date >= "2026-05-01" && d.date <= "2026-07-18");
   let filtered = allData.filter(d => d.date >= dari && d.date <= sampai);
   // Urutan: terlama dulu (1 Mei tampil di atas)
   filtered.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
@@ -2327,7 +2327,8 @@ function exportFirebaseJSON() {
 // ============ UPLOAD HISTORI===============
 function uploadHistoryToFirebase() {
 
-    const allData = generateSensorData();
+    const allData = generateSensorData()
+        .filter(d => d.date >= "2026-05-01" && d.date <= "2026-07-18");
 
     const history = {};
 
@@ -2338,12 +2339,12 @@ function uploadHistoryToFirebase() {
         }
 
         history[d.date][d.time] = {
-            suhu: d.suhu,
-            kel: d.kel,
-            tanah: d.tanah,
-            cahaya: d.cahaya,
-            pompa: d.pompa,
-            status: d.status
+            suhu: d.suhu ?? null,
+            kel: d.kel ?? null,
+            tanah: d.tanah ?? null,
+            cahaya: d.cahaya ?? null,
+            pompa: d.pompa ?? false,
+            status: d.status ?? "Normal"
         };
 
     });
@@ -2357,6 +2358,7 @@ function uploadHistoryToFirebase() {
             console.error(err);
             alert(err.message);
         });
+
 }
 
 // ==================== SETTINGS ====================
