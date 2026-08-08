@@ -1075,6 +1075,9 @@ input, select, textarea { font-family: var(--font); }
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
             <button onclick="applyFilter()" style="padding:10px;font-size:0.875rem;background:var(--green-600);color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">🔍 Tampilkan</button>
             <button onclick="exportCSV()" style="padding:10px;background:white;color:var(--green-700);border:1.5px solid var(--green-300);border-radius:8px;font-size:0.875rem;font-weight:600;cursor:pointer;">⬇ Export CSV</button>
+            <button class="settings-btn secondary" onclick="exportFirebaseJSON()">
+    🔥 Export Firebase JSON
+</button>
           </div>
           <div id="filter-info" style="font-size:0.75rem;color:var(--grey-500);margin-bottom:10px;"></div>
           <div id="riwayat-table-wrap"></div>
@@ -2282,20 +2285,61 @@ function applyFilter() {
 
 function formatDateLabel(s) { return new Date(s + 'T00:00:00').toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}); }
 
-function exportCSV() {
-  const dari   = document.getElementById('filter-dari').value;
-  const sampai = document.getElementById('filter-sampai').value;
-  if (!dari || !sampai) { alert('Pilih rentang tanggal terlebih dahulu!'); return; }
-  const allData = generateSensorData();
-  let filtered = allData.filter(d => d.date >= dari && d.date <= sampai);
-  filtered.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
-  const header = 'Tanggal,Waktu,Suhu (C),Kel. Tanah (%),Cahaya (lux),Status\n';
-  const rows = filtered.map(d => `${d.date},${d.time},${d.suhu},${d.tanah},${d.cahaya},${d.status}`).join('\n');
-  const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a'); a.href = url; a.download = `sawahsmart_${dari}_${sampai}.csv`; a.click();
-  URL.revokeObjectURL(url);
-  showToast('ok','📥','Export Berhasil','File CSV berhasil diunduh.');
+function exportFirebaseJSON() {
+
+    const dari = document.getElementById('filter-dari').value;
+    const sampai = document.getElementById('filter-sampai').value;
+
+    if (!dari || !sampai) {
+        alert('Pilih rentang tanggal terlebih dahulu!');
+        return;
+    }
+
+    const allData = generateSensorData();
+
+    const filtered = allData
+        .filter(d => d.date >= dari && d.date <= sampai)
+        .sort((a,b) => (a.date + a.time).localeCompare(b.date + b.time));
+
+    const history = {};
+
+    filtered.forEach(d => {
+
+        if (!history[d.date]) {
+            history[d.date] = {};
+        }
+
+        history[d.date][d.time] = {
+            suhu: d.suhu,
+            kel: d.kel,
+            tanah: d.tanah,
+            cahaya: d.cahaya,
+            pompa: d.pompa,
+            status: d.status
+        };
+
+    });
+
+    const blob = new Blob(
+        [JSON.stringify(history, null, 2)],
+        { type: "application/json" }
+    );
+
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `history_${dari}_${sampai}.json`;
+    a.click();
+
+    URL.revokeObjectURL(url);
+
+    showToast(
+        'ok',
+        '🔥',
+        'Export Firebase Berhasil',
+        'history.json siap di-import ke Firebase.'
+    );
 }
 
 // ==================== SETTINGS ====================
@@ -2360,7 +2404,7 @@ function clearAllData() {
 }
 
 // ==================== KAMERA ====================
-const CLOUD_RUN_URL = localStorage.getItem('cloud_run_url') || 'https://upload-padi-je6fikdiha-et.a.run.app';
+const CLOUD_RUN_URL = localStorage.getItem('cloud_run_url') || 'https://upload-padi-qg55cyk7ea-et.a.run.app';
 
 function initKameraPage() { loadModels(); loadImageGallery(); loadDetectionResults(); }
 
