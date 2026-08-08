@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>SawahSmart — Monitoring Padi Polybag</title>
+<title>Dashboard — Monitoring Padi Polybag</title>
 <meta name="theme-color" content="#2d7a3c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SawahSmart">
+<meta name="apple-mobile-web-app-title" content="Dashboard">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -696,7 +696,7 @@ input, select, textarea { font-family: var(--font); }
   <div class="splash-bg-ring" style="width:360px;height:360px;bottom:-100px;left:-100px;animation-delay:1s;"></div>
   <div class="splash-content">
     <div class="splash-logo">🌾</div>
-    <div class="splash-app-name">SawahSmart</div>
+    <div class="splash-app-name">Dashboard</div>
     <div class="splash-tagline">Monitoring Padi Pot / Polybag</div>
     <div style="font-size:0.85rem;color:rgba(255,255,255,0.6);margin-bottom:6px;">Selamat Datang,</div>
     <div class="splash-username" id="splash-name">Petani</div>
@@ -758,7 +758,7 @@ input, select, textarea { font-family: var(--font); }
   <div class="login-card">
     <div class="login-logo">
       <div class="logo-icon">🌾</div>
-      <h1>SawahSmart</h1>
+      <h1>Dashboard</h1>
       <p>Monitoring Padi Pot / Polybag Berbasis IoT</p>
     </div>
     <div class="login-features">
@@ -795,7 +795,7 @@ input, select, textarea { font-family: var(--font); }
   <div class="login-card" style="max-width:420px;">
     <div class="login-logo">
       <div class="logo-icon">🌾</div>
-      <h1>SawahSmart</h1>
+      <h1>Dashboard</h1>
       <p>Buat akun untuk mulai memantau tanaman padi</p>
     </div>
     <div class="login-divider"></div>
@@ -838,7 +838,7 @@ input, select, textarea { font-family: var(--font); }
     <div class="sidebar-brand">
       <div class="logo-sm">🌾</div>
       <div>
-        <span>SawahSmart</span>
+        <span>Dashboard</span>
         <small>Padi Polybag IoT</small>
       </div>
     </div>
@@ -1358,7 +1358,7 @@ input, select, textarea { font-family: var(--font); }
           <div class="settings-row"><div class="settings-row-left"><div class="sr-label">Platform</div></div><div class="settings-row-right"><span style="font-size:0.8rem;color:var(--grey-600);">PWA · IoT · Firebase · ESP32</span></div></div>
           <div class="settings-row"><div class="settings-row-left"><div class="sr-label">Studi Kasus</div></div><div class="settings-row-right"><span style="font-size:0.8rem;color:var(--grey-600);">Monitoring Padi Polybag</span></div></div>
           <div class="settings-row">
-            <div class="settings-row-left"><div class="sr-label">Install sebagai App</div><div class="sr-desc">Pasang SawahSmart di layar utama perangkat</div></div>
+            <div class="settings-row-left"><div class="sr-label">Install sebagai App</div><div class="sr-desc">Pasang Dashboard di layar utama perangkat</div></div>
             <div class="settings-row-right">
               <button class="settings-btn secondary" id="pwa-install-btn" onclick="installPWA()" style="display:none;">📲 Install PWA</button>
               <span id="pwa-install-status" style="font-size:0.8rem;color:var(--grey-500);">Buka di browser mobile untuk install</span>
@@ -1373,6 +1373,10 @@ input, select, textarea { font-family: var(--font); }
 </div><!-- /page-app -->
 
 <script>
+// Cache nilai sensor terkini — dideklarasikan paling awal agar tidak pernah
+// "Cannot access before initialization" walau kode lain di bawah gagal/error duluan.
+let _lastSensor = {};
+
 // ==================== ACCOUNTS ====================
 function loadAccounts() {
   try { return JSON.parse(localStorage.getItem('sawahsmart_accounts') || '[]'); }
@@ -1668,8 +1672,37 @@ const firebaseConfig = {
   messagingSenderId: "6740091529",
   appId: "1:6740091529:web:cc3e4b4e1f1ff84066dc58"
 };
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+// Stub 'db' no-op: dipakai sebagai fallback bila SDK Firebase gagal dimuat
+// (mis. domain gstatic.com diblokir jaringan/offline). Mencegah error
+// "firebase is not defined" merusak seluruh script (yang tadinya bikin
+// variabel lain di bawahnya ikut error "before initialization").
+function makeOfflineDbStub() {
+  const chain = {
+    on()      { return chain; },
+    off()     { return chain; },
+    once()    { return Promise.resolve({ val: () => null }); },
+    push()    { return Promise.resolve({ key: null }); },
+    set()     { return Promise.resolve(); },
+    update()  { return Promise.resolve(); },
+    remove()  { return Promise.resolve(); },
+    orderByChild()  { return chain; },
+    orderByKey()    { return chain; },
+    limitToLast()   { return chain; },
+  };
+  return { ref: () => chain };
+}
+
+let db;
+let firebaseOffline = false;
+try {
+  if (typeof firebase === 'undefined') throw new Error('SDK Firebase gagal dimuat (cek koneksi/domain gstatic.com diblokir)');
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+} catch (e) {
+  console.warn('Firebase tidak tersedia, beralih ke mode offline/demo:', e.message || e);
+  firebaseOffline = true;
+  db = makeOfflineDbStub();
+}
 
 // Mapping status Firebase
 function statusClass(s) { return s === 'NRM' ? 'ok' : s === 'WRN' ? 'warn' : 'danger'; }
@@ -1679,9 +1712,6 @@ function updateStatCard(elId, stElId, val, unit, sts) {
   if (el) el.innerHTML = val + '<span class="stat-unit">' + unit + '</span>';
   if (st) { st.className = 'stat-status ' + statusClass(sts); st.textContent = statusLabel(sts); }
 }
-
-// Cache nilai sensor terkini
-let _lastSensor = {};
 
 db.ref('/sensor').on('value', (snap) => {
   const d = snap.val(); if (!d) return;
@@ -1726,12 +1756,12 @@ function recordSensorSnapshot(d) {
   const hh    = String(now.getHours()).padStart(2,'0');
   const mm    = String(Math.floor(now.getMinutes() / 15) * 15).padStart(2,'0');
   const slot  = hh + ':' + mm;
-  const dateStr = now.toISOString().slice(0,10);
+  const dateStr = localDateStr(now);
   const key   = dateStr + 'T' + slot;
   if (_lastRecordedSlot === key) return; // sudah direkam slot ini
   _lastRecordedSlot = key;
 
-  const KEY = 'sawahsmart_sensor_data_v9';
+  const KEY = 'sawahsmart_sensor_data_v14';
   let data = [];
   try { data = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { data = []; }
 
@@ -1745,6 +1775,7 @@ function recordSensorSnapshot(d) {
     suhu:   d.suhu     ? +d.suhu.toFixed(1)          : null,
     cahaya: d.cahaya !== undefined && d.cahaya !== null ? sanitizeLux(Math.round(d.cahaya), parseInt(slot.slice(0,2))) : null,
     tanah:  d.tanahPersen !== undefined ? d.tanahPersen : null,
+    pompa:  d.pompa === true,
     status,
     isReal: true
   });
@@ -1985,7 +2016,7 @@ function checkNotifTriggers(d) {
       _alertCD[key] = now;
       addNotif(type, title, msg);
       showToast(type, type==='danger'?'🚨':'⚠️', title, msg);
-      if (Notification.permission === 'granted') try { new Notification('SawahSmart — '+title,{body:msg,tag:key,renotify:true}); } catch(e){}
+      if (Notification.permission === 'granted') try { new Notification('Dashboard — '+title,{body:msg,tag:key,renotify:true}); } catch(e){}
     }
   }
   if (d.tanahPersen !== undefined && d.tanahPersen < 40)  trigger('tanahKering', 'danger', '💧 Tanah Kering!', `Kelembapan tanah ${d.tanahPersen}% — segera nyalakan pompa.`, 10);
@@ -2035,6 +2066,16 @@ function updateNotifPermStatus() {
 // Sesuai draft thesis: batas normal cahaya 2000-8000 lux HANYA berlaku siang hari.
 // Malam (18:00 - 05:59, tidak ada lampu) = gelap, 0-1 lx, dan itu wajar.
 function isJamMalam(hour) { return hour >= 18 || hour < 6; }
+// PENTING: gunakan ini, JANGAN toISOString().slice(0,10), untuk mengubah Date -> "YYYY-MM-DD".
+// toISOString() mengonversi ke UTC dulu, jadi di zona waktu WIB (+7) tanggal bisa "mundur"
+// 1 hari (mis. tengah malam lokal 1 Mei bisa jadi tercatat sebagai 30 April). Fungsi ini
+// memakai komponen tanggal LOKAL apa adanya, tidak digeser sama sekali.
+function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 function sanitizeLux(v, hour) {
   if (v === null || v === undefined) return v;
   if (hour !== undefined && isJamMalam(hour)) return Math.round(v); // malam: biarkan apa adanya (≈0-1 lx)
@@ -2049,8 +2090,13 @@ function generateSensorData() {
   localStorage.removeItem('sawahsmart_sensor_data_v6'); // data lama masih ada lux < 2000 di siang hari
   localStorage.removeItem('sawahsmart_sensor_data_v7'); // data lama malam hari salah (dipaksa > 2000)
   localStorage.removeItem('sawahsmart_sensor_data_v8'); // data lama suhu malam terlalu hangat
+  localStorage.removeItem('sawahsmart_sensor_data_v9'); // data lama kelembapan tanah acak per 15 menit (tidak stabil)
+  localStorage.removeItem('sawahsmart_sensor_data_v10'); // data lama kelembapan tanah masih loncat drastis antar periode
+  localStorage.removeItem('sawahsmart_sensor_data_v11'); // data lama kecepatan berubahnya belum pas (malam kurang lambat, siang kurang cepat)
+  localStorage.removeItem('sawahsmart_sensor_data_v12'); // data lama kelembapan tanah naik-turun mengikuti kurva tanpa logika pompa (tidak realistis)
+  localStorage.removeItem('sawahsmart_sensor_data_v13'); // data lama suhu/kelembapan udara/cahaya belum saling berkorelasi (acak independen)
 
-  const KEY = 'sawahsmart_sensor_data_v9';
+  const KEY = 'sawahsmart_sensor_data_v14';
   let data = [];
   try { data = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { data = []; }
 
@@ -2069,7 +2115,7 @@ function generateSensorData() {
   });
 
   const today = new Date(); today.setHours(0,0,0,0);
-  const todayStr = today.toISOString().slice(0,10);
+  const todayStr = localDateStr(today);
 
   // Data HANYA dari 1 Mei 2026 ke atas, data sebelumnya tidak ada
   const startDate = new Date('2026-05-01T00:00:00');
@@ -2078,12 +2124,35 @@ function generateSensorData() {
   data = data.filter(d => d.date >= '2026-05-01');
 
   // Simpan hasil koreksi agar permanen
-  if (adaKoreksi) { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch(e) {} }
+  if (adaKoreksi) { try { db.ref("history").once("value") } catch(e) {} }
 
-  if (!data.some(d => d.date === todayStr)) {
+  // PENTING: jangan cek "apakah ADA entri bertanggal hari ini" saja — 1 entri sensor
+  // REAL (dari recordSensorSnapshot) yang kebetulan tercatat duluan untuk hari ini bisa
+  // membuat pengecekan itu salah lolos, sehingga seluruh riwayat simulasi 1 Mei s/d
+  // kemarin tidak pernah ter-generate (persis gejala "Tidak ada data" di riwayat).
+  // Sebagai gantinya, cek apakah SETIAP tanggal (1 Mei s/d hari ini) sudah punya
+  // data simulasi; kalau ada yang bolong, generate ulang (loop di bawah otomatis
+  // melewati tanggal yang sudah lengkap).
+  const simulatedDates = new Set(data.filter(d => d.isSimulated).map(d => d.date));
+  let adaTanggalBolong = false;
+  { const c = new Date(startDate); while (c <= today) { if (!simulatedDates.has(localDateStr(c))) { adaTanggalBolong = true; break; } c.setDate(c.getDate() + 1); } }
+
+  if (adaTanggalBolong) {
+    // State persisten lintas hari, agar semua sensor saling berkorelasi seperti
+    // data IoT nyata (bukan angka acak independen per slot):
+    //   cahaya (matahari) -> suhu naik  -> tanah (evaporasi) turun
+    //   tanah < 50%       -> pompa ON   -> tanah naik -> tanah ~80% -> pompa OFF
+    //   suhu turun (malam)-> kelembapan udara naik, tanah stabil
+    let cloudFactor = 0.9; // faktor awan yang melayang pelan (0.85–1.0), pengaruhi cahaya & suhu bersama
+    let suhuValue   = 24;  // suhu berjalan (°C), bergerak halus menuju target tiap slot
+    let kelValue    = 85;  // kelembapan udara berjalan (%), berlawanan arah dgn suhu
+    let soilValue   = 75;  // kelembapan tanah berjalan (%), mulai dari kondisi lembap (baru disiram)
+    let pumpOn      = false; // status pompa otomatis, konsisten dgn tanah & riwayat
+    let pumpTarget  = 0;     // target tanah (~75-85%) saat pompa sedang ON
+
     const cur = new Date(startDate);
     while (cur <= today) {
-      const dateStr = cur.toISOString().slice(0,10);
+      const dateStr = localDateStr(cur);
       if (!data.some(r => r.date === dateStr)) {
         const slots = [];
         for (let h = 0; h <= 23; h++)
@@ -2096,40 +2165,62 @@ function generateSensorData() {
 
         slots.forEach((time, i) => {
           const hour = parseInt(time.slice(0,2));
+          const minute = parseInt(time.slice(3,5));
+          const hourFrac = hour + minute / 60;
           const isMalam = isJamMalam(hour); // jam 18:00 - 05:45 = malam (tidak ada lampu)
           const isSiang = hour >= 10 && hour <= 15; // jam 10:00 - 15:45 = siang terik
-
-          // Suhu: siang 30-34°C, malam dingin — sore/awal malam (18:00-23:45) 25-27°C,
-          // tengah malam s/d subuh (00:00-05:45) paling dingin 23.5-25.5°C
           const isTengahMalam = hour < 6;
-          const suhu = isMalam
-            ? (isTengahMalam
-                ? +(23.5 + rng(i) * 2).toFixed(1)
-                : +(25 + rng(i) * 2).toFixed(1))
-            : isSiang
-              ? +(30 + rng(i) * 4).toFixed(1)
-              : +(27 + rng(i) * 4).toFixed(1);
 
-          // Kelembapan: malam lebih tinggi (70-90%), siang lebih rendah (55-75%)
-          const kel = isMalam
-            ? Math.round(70 + rng(i + 100) * 20)
-            : Math.round(55 + rng(i + 100) * 20);
-
-          // Cahaya (sesuai thesis): malam gelap 0-1 lx (tanpa lampu),
-          // siang harus dalam rentang normal 2000-8000 lux
+          // 1) CAHAYA — kurva matahari halus (0 di jam 06:00 & 18:00, puncak di jam 12:00),
+          //    dikalikan faktor awan yang melayang pelan supaya tidak melompat acak.
+          //    Malam: gelap total 0-1 lx (tanpa lampu).
+          cloudFactor = Math.min(1.0, Math.max(0.85, cloudFactor + (rng(i + 900) - 0.5) * 0.03));
+          const siMatahari = isMalam ? 0 : Math.max(0, Math.sin(Math.PI * (hourFrac - 6) / 12));
           const cahaya = isMalam
             ? (rng(i + 200) < 0.5 ? 0 : 1)
-            : isSiang
-              ? Math.round(4000 + rng(i + 200) * 4000)
-              : Math.round(2500 + rng(i + 200) * 2300);
+            : Math.round(2000 + 6000 * siMatahari * cloudFactor);
 
-          // Tanah: relatif stabil, malam sedikit lebih lembap
-          const tanah = isMalam
-            ? Math.min(83, Math.round(55 + rng(i + 300) * 20))
-            : Math.min(83, Math.round(45 + rng(i + 300) * 30));
+          // 2) SUHU — mengikuti cahaya (cahaya tinggi -> suhu naik), bergerak HALUS
+          //    (maks ±0.4°C per 15 menit) menuju target, tidak pernah melompat.
+          const suhuTarget = isMalam
+            ? (isTengahMalam ? 23.5 + rng(i) * 2 : 25 + rng(i) * 2) // 00:00-05:45: 23.5-25.5°C · 18:00-23:45: 25-27°C
+            : 27 + 7 * siMatahari * cloudFactor;                    // siang terik (puncak ~12:00): ~30-34°C
+          suhuValue += Math.max(-0.4, Math.min(0.4, suhuTarget - suhuValue));
+          const suhu = +suhuValue.toFixed(1);
+
+          // 3) KELEMBAPAN UDARA — berlawanan arah dengan suhu (suhu naik -> udara
+          //    makin kering): pagi & malam (suhu rendah) tinggi, siang (suhu tinggi)
+          //    rendah. Bergerak halus (maks ±2%/15 menit), tidak melompat acak.
+          const kelTarget = Math.min(92, Math.max(52, 92 - (suhu - 23.5) * 3.1 + (rng(i + 100) - 0.5) * 4));
+          kelValue += Math.max(-2, Math.min(2, kelTarget - kelValue));
+          const kel = Math.round(kelValue);
+
+          // 4) TANAH + POMPA OTOMATIS — evaporasi mengikuti suhu (suhu naik -> tanah
+          //    turun lebih cepat), paling besar siang 10:00-15:00, sangat lambat/stabil
+          //    malam hari. Tanah HANYA naik kalau pompa ON (tidak pernah naik sendiri).
+          //    < 50% -> pompa otomatis ON; setelah tanah ~80% (target acak 75-85%) -> OFF.
+          if (pumpOn) {
+            const kenaikan = 8 + rng(i + 500) * 4; // pompa ON: naik ~8-12% per 15 menit
+            soilValue = Math.min(pumpTarget, soilValue + kenaikan);
+            if (soilValue >= pumpTarget) pumpOn = false; // target tercapai -> pompa OFF
+          } else {
+            const evapFactor = 0.5 + (suhu - 23.5) / 10.5; // suhu makin tinggi -> evaporasi makin cepat (~0.5x-1.5x)
+            let baseRate;
+            if (isTengahMalam)                    baseRate = rng(i + 500) * 0.3;        // 00:00-05:45: sangat lambat/stabil
+            else if (isMalam)                     baseRate = 0.1 + rng(i + 500) * 0.3;  // 18:00-23:45: lambat/stabil
+            else if (isSiang)                     baseRate = 0.9 + rng(i + 500) * 0.9;  // 10:00-15:45: penurunan paling besar
+            else                                  baseRate = 0.3 + rng(i + 500) * 0.5;  // pagi/sore: sedang
+            soilValue = Math.max(30, soilValue - baseRate * evapFactor);
+            if (soilValue < 50) {
+              pumpOn = true;
+              pumpTarget = 75 + rng(i + 600) * 10; // target acak sekitar 75-85%
+            }
+          }
+          const tanah = Math.round(soilValue);
+          const pompa = pumpOn; // status pompa konsisten dengan nilai tanah pada slot ini
 
           const status = suhu > 32 ? 'Panas' : suhu < 26 ? 'Dingin' : kel < 50 ? 'Kering' : 'Normal';
-          data.push({ date: dateStr, time, suhu, kel, cahaya, tanah, status, isSimulated: true });
+          data.push({ date: dateStr, time, suhu, kel, cahaya, tanah, pompa, status, isSimulated: true });
         });
       }
       cur.setDate(cur.getDate() + 1);
@@ -2140,7 +2231,7 @@ function generateSensorData() {
 }
 
 function initMonitoringFilter() {
-  const today  = new Date().toISOString().slice(0,10);
+  const today  = localDateStr(new Date());
   const dari   = document.getElementById('filter-dari');
   const sampai = document.getElementById('filter-sampai');
   // Default: 1 Mei 2026 s/d hari ini
@@ -2255,7 +2346,7 @@ async function exportAllData() {
     const data = { exported_at: new Date().toISOString(), sensor: snap.exists() ? snap.val() : {} };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob); const a = document.createElement('a');
-    a.href = url; a.download = 'sawahsmart_export_' + new Date().toISOString().slice(0,10) + '.json'; a.click();
+    a.href = url; a.download = 'sawahsmart_export_' + localDateStr(new Date()) + '.json'; a.click();
     URL.revokeObjectURL(url);
     showToast('ok','📥','Export Berhasil','Data sensor berhasil diunduh.');
   } catch(e) { showToast('warn','⚠️','Gagal','Tidak dapat export data: ' + e.message); }
@@ -2636,7 +2727,7 @@ async function installPWA() {
   _pwaInstallPrompt.prompt();
   const { outcome } = await _pwaInstallPrompt.userChoice;
   if (outcome === 'accepted') {
-    showToast('ok','📲','SawahSmart Terpasang!','Aplikasi berhasil ditambahkan ke layar utama.');
+    showToast('ok','📲','Dashboard Terpasang!','Aplikasi berhasil ditambahkan ke layar utama.');
     _pwaInstallPrompt = null;
     const btn = document.getElementById('pwa-install-btn'); if(btn) btn.style.display = 'none';
     const st  = document.getElementById('pwa-install-status'); if(st){ st.style.display=''; st.textContent='✅ Sudah terpasang'; }
@@ -2654,6 +2745,9 @@ async function installPWA() {
     // Tidak tampilkan splash saat restore session (langsung masuk)
     // Tapi tetap cek popup notifikasi setelah sebentar
     setTimeout(nmShow, 1200);
+    if (firebaseOffline) {
+      setTimeout(() => showToast('warn','⚠️','Mode Offline','Tidak bisa terhubung ke Firebase. Data real-time tidak tersedia.'), 800);
+    }
   }
 })();
 
