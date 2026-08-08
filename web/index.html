@@ -1078,11 +1078,14 @@ input, select, textarea { font-family: var(--font); }
             <button class="settings-btn secondary" onclick="exportFirebaseJSON()">
     🔥 Export Firebase JSON
 </button>
+
           </div>
           <div id="filter-info" style="font-size:0.75rem;color:var(--grey-500);margin-bottom:10px;"></div>
           <div id="riwayat-table-wrap"></div>
         </div>
       </div>
+
+
 
       <!-- ===== STATUS TANAMAN ===== -->
       <div class="inner-page" id="inner-tanaman">
@@ -2319,6 +2322,40 @@ function exportFirebaseJSON() {
         };
 
     });
+
+    function uploadHistoryToFirebase() {
+
+    const allData = generateSensorData();
+
+    const history = {};
+
+    allData.forEach(d => {
+
+        if (!history[d.date]) {
+            history[d.date] = {};
+        }
+
+        history[d.date][d.time] = {
+            suhu: d.suhu,
+            kel: d.kel,
+            tanah: d.tanah,
+            cahaya: d.cahaya,
+            pompa: d.pompa,
+            status: d.status
+        };
+
+    });
+
+    db.ref("history").set(history)
+        .then(() => {
+            alert("History berhasil diupload ke Firebase!");
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Upload gagal!");
+        });
+
+}
 
     const blob = new Blob(
         [JSON.stringify(history, null, 2)],
