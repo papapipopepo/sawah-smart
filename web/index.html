@@ -2132,23 +2132,13 @@ function generateSensorData() {
   // Simpan hasil koreksi agar permanen
   if (adaKoreksi) { try { db.ref("history").once("value") } catch(e) {} }
 
-  // PENTING: jangan cek "apakah ADA entri bertanggal hari ini" saja — 1 entri sensor
-  // REAL (dari recordSensorSnapshot) yang kebetulan tercatat duluan untuk hari ini bisa
-  // membuat pengecekan itu salah lolos, sehingga seluruh riwayat simulasi 1 Mei s/d
-  // kemarin tidak pernah ter-generate (persis gejala "Tidak ada data" di riwayat).
-  // Sebagai gantinya, cek apakah SETIAP tanggal (1 Mei s/d hari ini) sudah punya
-  // data simulasi; kalau ada yang bolong, generate ulang (loop di bawah otomatis
-  // melewati tanggal yang sudah lengkap).
+
   const simulatedDates = new Set(data.filter(d => d.isSimulated).map(d => d.date));
   let adaTanggalBolong = false;
   { const c = new Date(startDate); while (c <= today) { if (!simulatedDates.has(localDateStr(c))) { adaTanggalBolong = true; break; } c.setDate(c.getDate() + 1); } }
 
   if (adaTanggalBolong) {
-    // State persisten lintas hari, agar semua sensor saling berkorelasi seperti
-    // data IoT nyata (bukan angka acak independen per slot):
-    //   cahaya (matahari) -> suhu naik  -> tanah (evaporasi) turun
-    //   tanah < 50%       -> pompa ON   -> tanah naik -> tanah ~80% -> pompa OFF
-    //   suhu turun (malam)-> kelembapan udara naik, tanah stabil
+  
     let cloudFactor = 0.9; // faktor awan yang melayang pelan (0.85–1.0), pengaruhi cahaya & suhu bersama
     let suhuValue   = 24;  // suhu berjalan (°C), bergerak halus menuju target tiap slot
     let kelValue    = 85;  // kelembapan udara berjalan (%), berlawanan arah dgn suhu
@@ -2323,7 +2313,19 @@ function exportFirebaseJSON() {
 
     });
 
-    function uploadHistoryToFirebase() {
+    const blob = new Blob([JSON.stringify(history, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `history_${dari}_${sampai}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    showToast('ok','🔥','Export Firebase Berhasil','history.json siap di-import ke Firebase.');
+}
+
+// ============ UPLOAD HISTORI===============
+function uploadHistoryToFirebase() {
 
     const allData = generateSensorData();
 
@@ -2346,37 +2348,15 @@ function exportFirebaseJSON() {
 
     });
 
-    db.ref("history").set(history)
+    db.ref("history")
+        .set(history)
         .then(() => {
-            alert("History berhasil diupload ke Firebase!");
+            alert("History berhasil diupload!");
         })
         .catch(err => {
             console.error(err);
-            alert("Upload gagal!");
+            alert(err.message);
         });
-
-}
-
-    const blob = new Blob(
-        [JSON.stringify(history, null, 2)],
-        { type: "application/json" }
-    );
-
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `history_${dari}_${sampai}.json`;
-    a.click();
-
-    URL.revokeObjectURL(url);
-
-    showToast(
-        'ok',
-        '🔥',
-        'Export Firebase Berhasil',
-        'history.json siap di-import ke Firebase.'
-    );
 }
 
 // ==================== SETTINGS ====================
