@@ -78,3 +78,8 @@ gcloud run deploy upload-padi \
 ```
 
 Env: `GCS_BUCKET_NAME=padi-images-thesis-496412`
+
+## Team
+
+- Ezra Satria — ESP32-CAM firmware & ML pipeline
+- hajelnad — sensor/pump integration & web dashboard
